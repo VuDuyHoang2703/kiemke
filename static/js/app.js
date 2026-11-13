@@ -3847,6 +3847,22 @@
       }
     });
 
+    $("btn-reset-sample-data")?.addEventListener("click", async () => {
+      if (!confirm("Khôi phục lại toàn bộ dữ liệu mẫu 100 đơn ban đầu?")) return;
+      const btn = $("btn-reset-sample-data");
+      btn.disabled = true;
+      try {
+        const res = await api("/api/admin/reset-sample", { method: "POST" });
+        showToast(res.message || "Đã khôi phục thành công 100 đơn hàng!", "success");
+        await loadRentals();
+        await switchView("teams");
+      } catch (err) {
+        showToast(err.message || "Lỗi khôi phục dữ liệu", "error");
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
     $("modal-img-close").addEventListener("click", () => {
       $("img-modal").hidden = true;
     });
@@ -3911,6 +3927,9 @@
     bindEvents();
     try {
       await Promise.all([loadCatalog(false), loadRentals()]);
+      if (state.rentals && state.rentals.length > 0) {
+        await switchView("teams");
+      }
     } catch (err) {
       showToast("Lỗi khởi tạo dữ liệu: " + err.message, "error");
     }

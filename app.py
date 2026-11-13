@@ -59,9 +59,10 @@ if os.environ.get("VERCEL"):
     TMP_DIR = Path("/tmp")
     DB_PATH = TMP_DIR / "inventory.db"
     repo_db = DATA_DIR / "inventory.db"
-    if not DB_PATH.exists() and repo_db.exists():
+    if repo_db.exists():
         import shutil
-        shutil.copy2(repo_db, DB_PATH)
+        if not DB_PATH.exists() or DB_PATH.stat().st_size == 0:
+            shutil.copy2(repo_db, DB_PATH)
 else:
     DB_PATH = DATA_DIR / "inventory.db"
 
@@ -162,6 +163,33 @@ def api_reload_catalog():
     try:
         catalog, _ = load_catalog(force_reload=True)
         return jsonify({"ok": True, "catalog": catalog})
+    except Exception as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+@app.route("/api/admin/reset-sample", methods=["POST"])
+def api_reset_sample():
+    try:
+        repo_db = DATA_DIR / "inventory.db"
+        if os.environ.get("VERCEL"):
+            tmp_db = Path("/tmp") / "inventory.db"
+            if repo_db.exists():
+                import shutil
+                shutil.copy2(repo_db, tmp_db)
+        else:
+            from crm_parser import parse_crm_file, import_crm_orders
+            with open(SAMPLE_CRM_PATH, "rb") as f:
+                cat, _ = load_catalog()
+                result = parse_crm_file(f, cat, existing_crm_order_nos=set())
+            with get_conn(DB_PATH) as conn:
+                conn.execute("PRAGMA foreign_keys = OFF")
+                for tbl in ["inspection_entries", "supplementary_returns", "rental_change_logs", "deletion_logs", "rental_kits", "rentals"]:
+                    conn.execute(f"DELETE FROM {tbl}")
+                conn.execute("DELETE FROM sqlite_sequence")
+                conn.commit()
+                conn.execute("PRAGMA foreign_keys = ON")
+                import_crm_orders(conn, cat, result["orders"], actor="Hệ thống (Khôi phục mẫu)")
+        return jsonify({"ok": True, "message": "Đã khôi phục thành công 100 đơn hàng mẫu!"})
     except Exception as exc:
         return jsonify({"ok": False, "error": str(exc)}), 500
 
