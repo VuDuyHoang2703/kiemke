@@ -30,13 +30,31 @@ from excel_parser import parse_workbook, resolve_kit_cover_image
 from crm_parser import get_existing_crm_order_nos, import_crm_orders, parse_crm_file
 
 BASE_DIR = Path(__file__).resolve().parent
-EXCEL_PATH = BASE_DIR / "KIEM KE HANG THUE.xlsx"
-SAMPLE_CRM_PATH = BASE_DIR / "CRM_Saleorder_12.11.2026_13.57.52_512.xlsx"
+DATA_DIR = BASE_DIR / "data"
 STATIC_DIR = BASE_DIR / "static"
 IMAGE_DIR = BASE_DIR / "Image"
-DATA_DIR = BASE_DIR / "data"
+
+# Support data files located in data/ or root directory
+EXCEL_PATH = DATA_DIR / "KIEM KE HANG THUE.xlsx"
+if not EXCEL_PATH.exists():
+    EXCEL_PATH = BASE_DIR / "KIEM KE HANG THUE.xlsx"
+
+SAMPLE_CRM_PATH = DATA_DIR / "CRM_Saleorder_12.11.2026_13.57.52_512.xlsx"
+if not SAMPLE_CRM_PATH.exists():
+    SAMPLE_CRM_PATH = BASE_DIR / "CRM_Saleorder_12.11.2026_13.57.52_512.xlsx"
+
 CATALOG_PATH = DATA_DIR / "catalog.json"
-DB_PATH = DATA_DIR / "inventory.db"
+
+# In Vercel serverless environment, filesystem is read-only except /tmp
+if os.environ.get("VERCEL"):
+    TMP_DIR = Path("/tmp")
+    DB_PATH = TMP_DIR / "inventory.db"
+    repo_db = DATA_DIR / "inventory.db"
+    if not DB_PATH.exists() and repo_db.exists():
+        import shutil
+        shutil.copy2(repo_db, DB_PATH)
+else:
+    DB_PATH = DATA_DIR / "inventory.db"
 
 EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
 
