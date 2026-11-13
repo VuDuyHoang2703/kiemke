@@ -1,10 +1,19 @@
 import io
 import json
+import mimetypes
 import os
 import re
 import urllib.parse
 from datetime import datetime
 from pathlib import Path
+
+# Đảm bảo Content-Type chuẩn xác trên môi trường Linux / Serverless (Vercel)
+mimetypes.add_type("text/css", ".css")
+mimetypes.add_type("application/javascript", ".js")
+mimetypes.add_type("image/png", ".png")
+mimetypes.add_type("image/jpeg", ".jpg")
+mimetypes.add_type("image/jpeg", ".jpeg")
+mimetypes.add_type("image/svg+xml", ".svg")
 
 from flask import Flask, g, jsonify, render_template, request, send_file, send_from_directory, session
 from openpyxl import Workbook
@@ -125,7 +134,13 @@ def load_catalog(force_reload=False):
     return catalog, by_id
 
 
+@app.route("/static/<path:filename>")
+def serve_static(filename):
+    return send_from_directory(STATIC_DIR, filename)
+
+
 @app.route("/kit-covers/<path:filename>")
+@app.route("/Image/<path:filename>")
 def serve_kit_cover(filename):
     return send_from_directory(IMAGE_DIR, filename)
 
