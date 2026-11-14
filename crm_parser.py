@@ -16,31 +16,70 @@ def get_existing_crm_order_nos(conn):
     return {r["crm_order_no"].strip().upper() for r in rows if r["crm_order_no"]}
 
 
-def map_item_to_kit(code: str, desc: str, kits_by_id: dict):
+def classify_crm_line_item(code: str, desc: str, kits_by_id: dict):
+    """
+    Phân tích chi tiết hàng thuê từ Diễn giải và Mã hàng hóa CRM.
+    Tập trung trích xuất từ khóa chính từ 'Diễn giải' để nhận diện đúng bộ robot hoặc linh kiện lẻ,
+    không phụ thuộc hoàn toàn vào mã hàng hóa (vì các bộ kit trong catalog không có mã nội bộ của CRM).
+    """
     c = (code or "").upper().strip()
-    d = (desc or "").lower().strip()
+    d = (desc or "").strip()
+    d_lower = d.lower()
 
-    if "2671" in c or "nhiệm vụ 2671" in d or "super track props" in d:
-        kid = "nhiem_vu_2671"
-    elif "2681" in c or "mở rộng 2026" in d or "mở rộng 2681" in d:
-        kid = "mo_rong_2681"
-    elif "2108" in c or "intelligence storm" in d:
-        kid = "intell_e6"
-    elif "2508" in c or "innovation storm" in d:
-        kid = "inno_e7"
-    elif "2321" in c or "alpha set a" in d:
-        kid = "alpha_a"
-    elif "2323" in c or "alpha set c" in d:
-        kid = "alpha_c"
-    elif "2421" in c or "beta set" in d:
-        kid = "beta_2"
-    elif "alpha b" in d or "alpha set b" in d:
-        kid = "alpha_b"
-    else:
-        return None, None
+    if c in ("DVGIAOHANG", "PHIGIAOHANG") or "phí giao hàng" in d_lower:
+        return "SERVICE", None, None
 
-    kit_name = kits_by_id.get(kid, {}).get("name", kid)
-    return kid, kit_name
+    # Các từ khóa chỉ rõ đây là linh kiện lẻ / thiết bị bổ sung đi kèm, không phải cả bộ robot hoàn chỉnh
+    is_component = any(w in d_lower for w in [
+        "dùng kết hợp cho bộ", "dùng kết hợp", "dùng trong bộ", "sử dụng cùng", 
+        "cảm biến", "động cơ", "pin lithium", "mô-đun", "sa bàn", "tay cầm", "tấm plate", "bánh xe", "servo"
+    ])
+
+    if not is_component:
+        # Nhận diện các bộ Kit hoàn chỉnh từ Diễn giải hoặc mã
+        if "alpha set a" in d_lower or "alpha a" in d_lower or "2321" in c:
+            kname = kits_by_id.get("alpha_a", {}).get("name", "ALPHA A")
+            return "KIT", "alpha_a", kname
+        if "alpha set b" in d_lower or "alpha b" in d_lower:
+            kname = kits_by_id.get("alpha_b", {}).get("name", "ALPHA B")
+            return "KIT", "alpha_b", kname
+        if "alpha set c" in d_lower or "alpha c" in d_lower or "2323" in c:
+            kname = kits_by_id.get("alpha_c", {}).get("name", "ALPHA C")
+            return "KIT", "alpha_c", kname
+        if "beta set" in d_lower or "beta" in d_lower or "2421" in c:
+            kname = kits_by_id.get("beta", {}).get("name", "BETA")
+            return "KIT", "beta", kname
+        if "intelligence storm" in d_lower or "intelligent storm" in d_lower or "2108" in c:
+            kname = kits_by_id.get("intell_e6", {}).get("name", "INTELL (E6)")
+            return "KIT", "intell_e6", kname
+        if "innovation storm" in d_lower or "inno" in d_lower or "2508" in c:
+            kname = kits_by_id.get("inno_e7", {}).get("name", "INNO (E7)")
+            return "KIT", "inno_e7", kname
+        if "mở rộng 2026" in d_lower or "mở rộng 2681" in d_lower or "bộ công cụ mở rộng" in d_lower or "2681" in c:
+            kname = kits_by_id.get("mo_rong_2681", {}).get("name", "MỞ RỘNG 2681")
+            return "KIT", "mo_rong_2681", kname
+        if "nhiệm vụ 2026" in d_lower or "nhiệm vụ 2671" in d_lower or "super track props" in d_lower or "bộ nhiệm vụ" in d_lower or "2671" in c:
+            kname = kits_by_id.get("nhiem_vu_2671", {}).get("name", "Bộ nhiệm vụ 2671")
+            return "KIT", "nhiem_vu_2671", kname
+
+    # Linh kiện lẻ / Thiết bị thuê ngoài bộ: trích xuất tên hiển thị sạch và gọn từ Diễn giải
+    clean_name = d
+    clean_name = re.sub(r"-\s*Mã:\s*.*$", "", clean_name, flags=re.I).strip()
+    clean_name = re.sub(r"\(Mã:\s*.*?\)", "", clean_name, flags=re.I).strip()
+    clean_name = re.sub(r"\(cho thuê.*?\)", "", clean_name, flags=re.I).strip()
+    clean_name = re.sub(r"\(đã qua sử dụng.*?\)", "", clean_name, flags=re.I).strip()
+    clean_name = re.sub(r"\s+", " ", clean_name).strip()
+    if not clean_name:
+        clean_name = d or c
+
+    return "ITEM", code, clean_name
+
+
+def map_item_to_kit(code: str, desc: str, kits_by_id: dict):
+    typ, kid, kname = classify_crm_line_item(code, desc, kits_by_id)
+    if typ == "KIT":
+        return kid, kname
+    return None, None
 
 
 def _build_catalog_item_index(catalog: dict):
@@ -63,7 +102,7 @@ def _build_catalog_item_index(catalog: dict):
 
 def find_catalog_match(code: str, desc: str, all_catalog_items: list):
     """Match loose items against standard catalog parts to reuse image, unit and replacement price."""
-    c_clean = re.sub(r"-(RENT|RENT2)$", "", (code or "").strip(), flags=re.I).strip().lower()
+    c_clean = re.sub(r"-(RENT|RENT2|USED)$", "", (code or "").strip(), flags=re.I).strip().lower()
     d_clean = (desc or "").lower().strip()
 
     # 1. Exact or substring code match
@@ -84,9 +123,19 @@ def find_catalog_match(code: str, desc: str, all_catalog_items: list):
             if "tracking" in it["name"].lower():
                 return it
 
+    if "màu sắc" in d_clean or "color sensor" in d_clean or "1147" in c_clean:
+        for it in all_catalog_items:
+            if "color" in it["name"].lower():
+                return it
+
     if "3570" in c_clean or ("động cơ lớn" in d_clean and "e6" in d_clean):
         for it in all_catalog_items:
-            if "3581" in it["name"].lower() or "motor" in it["name"].lower():
+            if "large motor" in it["name"].lower():
+                return it
+
+    if "3581" in c_clean or "động cơ giảm tốc trung bình" in d_clean:
+        for it in all_catalog_items:
+            if "medium motor" in it["name"].lower():
                 return it
 
     return None
@@ -112,39 +161,82 @@ def parse_crm_file(file_source, catalog: dict, existing_crm_order_nos: set = Non
     else:
         wb = openpyxl.load_workbook(str(file_source), data_only=True)
 
-    ws_list = wb["Danh sách"] if "Danh sách" in wb.sheetnames else wb.active
-    ws_items = wb["Bảng hàng hóa"] if "Bảng hàng hóa" in wb.sheetnames else None
+    ws_list = None
+    ws_items = None
+    for name in wb.sheetnames:
+        clean = name.strip().lower()
+        if clean in ("danh sách", "danh sach", "orders", "danh sách đơn hàng", "ds"):
+            ws_list = wb[name]
+        elif clean in ("bảng hàng hóa", "bang hang hoa", "hàng hóa", "hang hoa", "chi tiết", "chi tiet", "items"):
+            ws_items = wb[name]
 
-    # 1. Parse items grouped by order_no from Bảng hàng hóa
+    if ws_list is None:
+        ws_list = wb.active
+    if ws_items is None and len(wb.sheetnames) > 1:
+        for name in wb.sheetnames:
+            if wb[name] != ws_list:
+                ws_items = wb[name]
+                break
+
+    # 1. Detect columns and parse items grouped by order_no from Bảng hàng hóa
     order_items_map = {}
     if ws_items:
+        items_cols = {
+            "order_col": 1,
+            "code_col": 2,
+            "desc_col": 3,
+            "unit_col": 7,
+            "qty_col": 8,
+            "price_col": 10,
+        }
+        for c in range(1, min(30, ws_items.max_column + 1)):
+            h = str(ws_items.cell(1, c).value or "").strip().lower()
+            if not h:
+                continue
+            if any(k in h for k in ("số đơn hàng", "mã đơn hàng", "số đơn")):
+                items_cols["order_col"] = c
+            elif any(k in h for k in ("mã hàng hóa", "mã hàng", "mã sản phẩm")):
+                items_cols["code_col"] = c
+            elif any(k in h for k in ("diễn giải", "tên hàng hóa", "tên hàng", "mô tả")):
+                items_cols["desc_col"] = c
+            elif any(k in h for k in ("đơn vị tính", "đvt")):
+                items_cols["unit_col"] = c
+            elif any(k in h for k in ("số lượng", "sl")):
+                if "giao" not in h:
+                    items_cols["qty_col"] = c
+            elif any(k in h for k in ("đơn giá", "giá")):
+                if "sau" not in h:
+                    items_cols["price_col"] = c
+
         for r in range(2, ws_items.max_row + 1):
-            raw_no = str(ws_items.cell(r, 1).value or "").strip()
+            raw_no = str(ws_items.cell(r, items_cols["order_col"]).value or "").strip()
             if not raw_no:
                 continue
             order_no = re.sub(r"\s+", " ", raw_no).strip()
             token_key = order_no.split()[0] if order_no.split() else order_no
 
-            code = str(ws_items.cell(r, 2).value or "").strip()
-            desc = str(ws_items.cell(r, 3).value or "").strip()
-            unit_str = str(ws_items.cell(r, 7).value or "Cái").strip()
+            code = str(ws_items.cell(r, items_cols["code_col"]).value or "").strip()
+            desc = str(ws_items.cell(r, items_cols["desc_col"]).value or "").strip()
+            unit_str = str(ws_items.cell(r, items_cols["unit_col"]).value or "Cái").strip()
             if "/" in unit_str:
                 unit_str = unit_str.split("/")[0].strip()
 
-            raw_qty = ws_items.cell(r, 8).value or ws_items.cell(r, 7).value or 1
+            raw_qty = ws_items.cell(r, items_cols["qty_col"]).value or 1
             try:
                 qty = int(raw_qty)
             except (ValueError, TypeError):
                 qty = 1
 
-            raw_price = ws_items.cell(r, 10).value or 0
+            raw_price = ws_items.cell(r, items_cols["price_col"]).value or 0
             try:
                 price = float(raw_price)
             except (ValueError, TypeError):
                 price = 0.0
 
-            if not code:
+            if not code and not desc:
                 continue
+            if not code:
+                code = desc[:30].strip()
 
             item_obj = {
                 "code": code,
@@ -153,11 +245,11 @@ def parse_crm_file(file_source, catalog: dict, existing_crm_order_nos: set = Non
                 "qty": max(1, qty),
                 "unit_price": price,
             }
-            # Map items strictly by order_no (normalized spaces) and raw_no
+            # Map items strictly by order_no (normalized spaces), raw_no, and token_key
             if code.upper() in ("DVGIAOHANG", "PHIGIAOHANG"):
                 continue
 
-            for k in {order_no, raw_no}:
+            for k in {order_no, raw_no, token_key}:
                 if k not in order_items_map:
                     order_items_map[k] = []
                 order_items_map[k].append(item_obj)
@@ -165,13 +257,50 @@ def parse_crm_file(file_source, catalog: dict, existing_crm_order_nos: set = Non
     # 2. Parse orders list from Danh sách
     orders = []
 
+    list_cols = {
+        "order_col": 2,
+        "customer_col": 3,
+        "book_date_col": 6,
+        "due_date_col": 7,
+        "return_status_col": 8,
+        "goods_col": 9,
+        "recipient_col": 10,
+        "phone_col": 11,
+        "address_col": 12,
+        "staff_col": 13,
+    }
+    for c in range(1, min(25, ws_list.max_column + 1)):
+        h = str(ws_list.cell(1, c).value or "").strip().lower()
+        if not h:
+            continue
+        if any(k in h for k in ("số đơn hàng", "mã đơn hàng", "số đơn")):
+            list_cols["order_col"] = c
+        elif any(k in h for k in ("khách hàng", "tên khách", "đội thuê")):
+            list_cols["customer_col"] = c
+        elif any(k in h for k in ("ngày ghi sổ", "ngày ghi", "ngày đặt")):
+            list_cols["book_date_col"] = c
+        elif any(k in h for k in ("đến hạn trả", "hạn trả")):
+            list_cols["due_date_col"] = c
+        elif any(k in h for k in ("tình trạng hoàn trả", "hoàn trả")):
+            list_cols["return_status_col"] = c
+        elif any(k in h for k in ("hàng hóa", "sản phẩm")):
+            list_cols["goods_col"] = c
+        elif any(k in h for k in ("người nhận hàng", "người nhận")):
+            list_cols["recipient_col"] = c
+        elif any(k in h for k in ("điện thoại", "sđt")):
+            list_cols["phone_col"] = c
+        elif any(k in h for k in ("địa chỉ",)):
+            list_cols["address_col"] = c
+        elif any(k in h for k in ("người thực hiện", "nhân viên", "sale")):
+            list_cols["staff_col"] = c
+
     def fmt_dt(val):
         if isinstance(val, datetime):
             return val.strftime("%Y-%m-%d")
         return str(val or "").strip()
 
     for r in range(2, ws_list.max_row + 1):
-        order_no_raw = str(ws_list.cell(r, 2).value or "").strip()
+        order_no_raw = str(ws_list.cell(r, list_cols["order_col"]).value or "").strip()
         if not order_no_raw:
             continue
 
@@ -180,20 +309,33 @@ def parse_crm_file(file_source, catalog: dict, existing_crm_order_nos: set = Non
         tokens = order_key.split()
         short_token = tokens[0] if tokens else order_key
 
-        customer = str(ws_list.cell(r, 3).value or "").strip()
-        date_book = ws_list.cell(r, 6).value
-        date_due = ws_list.cell(r, 7).value
-        return_status = str(ws_list.cell(r, 8).value or "").strip()
-        goods_str = str(ws_list.cell(r, 9).value or "").strip()
-        recipient = str(ws_list.cell(r, 10).value or "").strip()
-        phone = str(ws_list.cell(r, 11).value or "").strip()
-        address = str(ws_list.cell(r, 12).value or "").strip()
-        staff = str(ws_list.cell(r, 13).value or "").strip()
+        customer = str(ws_list.cell(r, list_cols["customer_col"]).value or "").strip()
+        date_book = ws_list.cell(r, list_cols["book_date_col"]).value
+        date_due = ws_list.cell(r, list_cols["due_date_col"]).value
+        return_status = str(ws_list.cell(r, list_cols["return_status_col"]).value or "").strip()
+        goods_str = str(ws_list.cell(r, list_cols["goods_col"]).value or "").strip()
+        recipient = str(ws_list.cell(r, list_cols["recipient_col"]).value or "").strip()
+        phone = str(ws_list.cell(r, list_cols["phone_col"]).value or "").strip()
+        address = str(ws_list.cell(r, list_cols["address_col"]).value or "").strip()
+        staff = str(ws_list.cell(r, list_cols["staff_col"]).value or "").strip()
 
         due_date_str = fmt_dt(date_due)
         book_date_str = fmt_dt(date_book)
 
-        matched_items = list(order_items_map.get(order_key) or order_items_map.get(order_no_raw) or [])
+        raw_matched = list(
+            order_items_map.get(order_key)
+            or order_items_map.get(order_no_raw)
+            or order_items_map.get(short_token)
+            or []
+        )
+        # Deduplicate matched items by (code, desc, qty, unit_price)
+        seen_matched = set()
+        matched_items = []
+        for it in raw_matched:
+            mkey = (it.get("code"), it.get("desc"), it.get("qty"), it.get("unit_price"))
+            if mkey not in seen_matched:
+                seen_matched.add(mkey)
+                matched_items.append(it)
 
         # Cross-check with goods_str from Sheet 1:
         # If Sheet 1 has codes not present in matched_items, add them so no item is ever missed!
@@ -278,7 +420,8 @@ def parse_crm_file(file_source, catalog: dict, existing_crm_order_nos: set = Non
                 price = it.get("unit_price") or 0.0
                 images = []
                 unit = it.get("unit") or "Cái"
-                name = it.get("desc") or it.get("code")
+                _, _, clean_name = classify_crm_line_item(it["code"], it["desc"], kits_by_id)
+                name = clean_name or it.get("desc") or it.get("code")
 
                 if cat_match:
                     if price <= 0:
@@ -319,7 +462,8 @@ def parse_crm_file(file_source, catalog: dict, existing_crm_order_nos: set = Non
                 price = it.get("unit_price") or 0.0
                 images = []
                 unit = it.get("unit") or "Cái"
-                name = it.get("desc") or it.get("code")
+                _, _, clean_name = classify_crm_line_item(it["code"], it["desc"], kits_by_id)
+                name = clean_name or it.get("desc") or it.get("code")
 
                 if cat_match:
                     if price <= 0:
@@ -351,6 +495,31 @@ def parse_crm_file(file_source, catalog: dict, existing_crm_order_nos: set = Non
                 "display_name": "Phụ kiện đi kèm",
                 "is_loose_order": True,
                 "custom_items": custom_items,
+            })
+
+        if not kits:
+            # Fallback placeholder kit so staff can always open, inspect, and add items manually!
+            placeholder_name = f"Thiết bị thuê (Đơn {order_key})"
+            kits.append({
+                "kit_id": "thiet_bi_thue",
+                "kit_name": placeholder_name,
+                "instance_index": 1,
+                "same_type_total": 1,
+                "display_name": placeholder_name,
+                "is_loose_order": True,
+                "custom_items": [{
+                    "id": "item_1",
+                    "row_num": 1,
+                    "code": order_key,
+                    "name": placeholder_name,
+                    "unit": "Bộ",
+                    "qty": 1,
+                    "expected_qty": 1,
+                    "unit_price": 0.0,
+                    "images": [],
+                    "pair_group": None,
+                    "is_flat_set_price": False,
+                }],
             })
 
         note_parts = []

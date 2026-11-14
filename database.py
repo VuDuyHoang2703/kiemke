@@ -691,6 +691,17 @@ def build_rental_detail(conn, rental_row, catalog_by_id):
         same_type_total = kit_type_totals.get(kit_id, 1)
 
         cat_kit = catalog_by_id.get(kit_id)
+        if not cat_kit:
+            # Map legacy or variant IDs to standard catalog kit IDs
+            if kit_id in ("beta_2", "beta_set", "beta_set_2"):
+                cat_kit = catalog_by_id.get("beta")
+            elif kit_id in ("alpha_set_a", "alpha_1", "alpha_a_set"):
+                cat_kit = catalog_by_id.get("alpha_a")
+            elif kit_id in ("alpha_set_b", "alpha_2", "alpha_b_set"):
+                cat_kit = catalog_by_id.get("alpha_b")
+            elif kit_id in ("alpha_set_c", "alpha_3", "alpha_c_set"):
+                cat_kit = catalog_by_id.get("alpha_c")
+
         if not cat_kit and rk.get("custom_items_json"):
             try:
                 items_parsed = json.loads(rk["custom_items_json"])
@@ -712,7 +723,20 @@ def build_rental_detail(conn, rental_row, catalog_by_id):
                 pass
 
         if not cat_kit:
-            continue
+            # Fallback for unmapped kit so order is NEVER displayed empty!
+            cat_kit = {
+                "id": kit_id,
+                "name": rk.get("kit_name") or kit_id,
+                "items": [{
+                    "id": f"{kit_id}_item_1",
+                    "code": rk.get("kit_code") or "",
+                    "name": rk.get("kit_name") or kit_id,
+                    "unit": "Bộ",
+                    "qty": 1,
+                    "unit_price": 0.0,
+                    "images": [],
+                }]
+            }
 
         # Friendly display label for this individual kit instance
         inst_suffix = f" (Bộ {instance_index}/{same_type_total})" if same_type_total > 1 else ""
