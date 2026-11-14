@@ -98,10 +98,50 @@ def init_db(db_path: Path):
             conn.execute("ALTER TABLE rentals ADD COLUMN delivery_address TEXT DEFAULT ''")
         if "initial_inspection_json" not in rental_cols:
             conn.execute("ALTER TABLE rentals ADD COLUMN initial_inspection_json TEXT DEFAULT NULL")
+        if "return_status" not in rental_cols:
+            conn.execute("ALTER TABLE rentals ADD COLUMN return_status TEXT DEFAULT 'Đã trả'")
+        if "original_info_json" not in rental_cols:
+            conn.execute("ALTER TABLE rentals ADD COLUMN original_info_json TEXT DEFAULT NULL")
+        if "original_kits_json" not in rental_cols:
+            conn.execute("ALTER TABLE rentals ADD COLUMN original_kits_json TEXT DEFAULT NULL")
 
         conn.execute("CREATE INDEX IF NOT EXISTS idx_rentals_crm_order_no ON rentals(crm_order_no)")
 
         purge_expired_deleted_rentals(conn)
+
+        # Migration: populate original_info_json for existing rentals
+        rows_to_init = conn.execute("SELECT * FROM rentals WHERE original_info_json IS NULL").fetchall()
+        for r in rows_to_init:
+            ret_stat = "Đã trả"
+            if "return_status" in r.keys() and r["return_status"]:
+                ret_stat = r["return_status"]
+            orig_info = {
+                "team_name": r["team_name"],
+                "returner_name": r["returner_name"],
+                "phone": r["phone"],
+                "email": r["email"] or "",
+                "due_date": r["due_date"] or "",
+                "delivery_address": r["delivery_address"] or "",
+                "note": r["note"] or "",
+                "return_status": ret_stat,
+            }
+            conn.execute(
+                "UPDATE rentals SET original_info_json = ?, return_status = COALESCE(return_status, 'Đã trả') WHERE id = ?",
+                (json.dumps(orig_info, ensure_ascii=False), r["id"]),
+            )
+
+        # Migration: Reset 51 CRM auto-completed rentals back to pending inspection
+        # ("Đã trả toàn bộ" = đã trả thiết bị, không đồng nghĩa là đã kiểm kê)
+        conn.execute(
+            """
+            UPDATE rentals
+            SET status = 'pending',
+                completed_at = NULL,
+                initial_inspection_json = NULL,
+                return_status = 'Đã trả'
+            WHERE status = 'completed' AND initial_inspection_json LIKE '%Hệ thống (CRM - Đã trả toàn bộ)%'
+            """
+        )
 
         # Check if rental_kits already uses the per-instance schema (has kit_code & instance_index)
         rk_cols = {
@@ -234,6 +274,8 @@ def init_db(db_path: Path):
         }
         if "custom_items_json" not in rk_cols_curr:
             conn.execute("ALTER TABLE rental_kits ADD COLUMN custom_items_json TEXT DEFAULT NULL")
+        if "is_added_after" not in rk_cols_curr:
+            conn.execute("ALTER TABLE rental_kits ADD COLUMN is_added_after INTEGER DEFAULT 0")
 
         conn.executescript(
             """
@@ -659,6 +701,15 @@ def build_rental_detail(conn, rental_row, catalog_by_id):
                 }
             except Exception:
                 cat_kit = None
+        elif cat_kit and rk.get("custom_items_json"):
+            try:
+                extra_items = json.loads(rk["custom_items_json"])
+                cat_kit = {
+                    **cat_kit,
+                    "items": list(cat_kit["items"]) + extra_items,
+                }
+            except Exception:
+                pass
 
         if not cat_kit:
             continue
@@ -757,6 +808,7 @@ def build_rental_detail(conn, rental_row, catalog_by_id):
                 "missing_items_count": kit_missing_count,
                 "missing_qty": round(kit_missing_qty, 4),
                 "compensation": round(kit_comp, 2),
+                "is_added_after": bool(rk.get("is_added_after")),
                 "items": kit_items_eval,
             }
         )
@@ -774,6 +826,7 @@ def build_rental_detail(conn, rental_row, catalog_by_id):
             "checked_count": kd["checked_count"],
             "missing_items_count": kd["missing_items_count"],
             "compensation": kd["compensation"],
+            "is_added_after": kd.get("is_added_after", False),
         }
         for kd in kit_details
     ]
@@ -832,4 +885,94 @@ def build_rental_detail(conn, rental_row, catalog_by_id):
     rental["initial_inspection"] = initial_insp
     rental["change_logs"] = get_change_logs(conn, rental["id"])
     rental["supplementary_rounds"] = supp_rounds
+
+    # 1. Parse original info and compute differences if edited
+    orig_info = {}
+    if rental.get("original_info_json"):
+        try:
+            orig_info = json.loads(rental["original_info_json"])
+        except Exception:
+            orig_info = {}
+    if not orig_info:
+        orig_info = {
+            "team_name": rental["team_name"],
+            "returner_name": rental["returner_name"],
+            "phone": rental["phone"],
+            "email": rental.get("email") or "",
+            "due_date": rental.get("due_date") or "",
+            "delivery_address": rental.get("delivery_address") or "",
+            "note": rental.get("note") or "",
+            "return_status": rental.get("return_status") or "Đã trả",
+        }
+
+    fields_meta = [
+        ("team_name", "Khách hàng / Đội thuê"),
+        ("returner_name", "Người nhận & SĐT / Người trả"),
+        ("phone", "Số điện thoại"),
+        ("email", "Email"),
+        ("due_date", "Hạn trả"),
+        ("delivery_address", "Địa chỉ giao hàng"),
+        ("return_status", "Tình trạng trả thiết bị"),
+        ("note", "Ghi chú"),
+    ]
+    info_diff = []
+    for k, lbl in fields_meta:
+        cur_v = str(rental.get(k) or "").strip()
+        orig_v = str(orig_info.get(k) or "").strip()
+        if cur_v != orig_v:
+            info_diff.append({
+                "field": k,
+                "label": lbl,
+                "old_val": orig_v,
+                "new_val": cur_v,
+            })
+
+    rental["is_edited"] = len(info_diff) > 0
+    rental["info_diff"] = info_diff
+    rental["original_info"] = orig_info
+    rental["return_status"] = rental.get("return_status") or "Đã trả"
+
+    # 2. Compute original kits vs added kits/items
+    added_kits_summary = []
+    original_kits_summary = []
+    for kd in kit_details:
+        rk_raw = next((r for r in kits_selected if r["id"] == kd["rental_kit_id"]), {})
+        is_added_kit = bool(rk_raw.get("is_added_after"))
+        
+        # Check custom items inside this kit (loose items)
+        added_items = [it for it in kd["items"] if it.get("is_added_after")]
+        orig_items = [it for it in kd["items"] if not it.get("is_added_after")]
+        
+        if is_added_kit:
+            added_kits_summary.append({
+                "type": "kit",
+                "display_label": kd["display_label"],
+                "kit_name": kd["kit_name"],
+                "total_items": kd["total_items"],
+                "is_added_after": True,
+            })
+        else:
+            if added_items:
+                for ait in added_items:
+                    added_kits_summary.append({
+                        "type": "item",
+                        "display_label": f"{ait['name']} ({kd['display_label']})",
+                        "item_name": ait["name"],
+                        "qty": ait.get("expected_qty") or 1,
+                        "unit": ait.get("unit") or "cái",
+                        "unit_price": ait.get("unit_price") or 0,
+                        "is_added_after": True,
+                    })
+            if orig_items or not added_items:
+                original_kits_summary.append({
+                    "type": "kit",
+                    "display_label": kd["display_label"],
+                    "kit_name": kd["kit_name"],
+                    "total_items": len(orig_items) if added_items else kd["total_items"],
+                })
+
+    rental["has_added_items"] = len(added_kits_summary) > 0
+    rental["added_kits_summary"] = added_kits_summary
+    rental["original_kits_summary"] = original_kits_summary
+
     return rental

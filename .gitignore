@@ -20,6 +20,8 @@ scratch/
 .DS_Store
 Thumbs.db
 Desktop.ini
+~$*
+
 
 # IDE & Editor files
 .vscode/

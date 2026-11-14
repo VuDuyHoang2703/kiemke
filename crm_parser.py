@@ -379,7 +379,7 @@ def parse_crm_file(file_source, catalog: dict, existing_crm_order_nos: set = Non
             status_label = "Đơn rỗng (không có linh kiện)"
         elif is_already_returned:
             status = "new"
-            status_label = "Mới (Đã trả toàn bộ - Tự hoàn tất)"
+            status_label = "Mới (Khách đã trả thiết bị - Chờ kiểm kê)"
         elif is_loose:
             status = "new"
             status_label = "Mới (Thuê phụ kiện lẻ)"
@@ -453,28 +453,32 @@ def import_crm_orders(conn, catalog: dict, orders_data: list, actor: str = "Ngư
         ticket_code = order["order_no"]
 
         is_already_returned = order.get("is_already_returned") or ("đã trả toàn bộ" in str(order.get("return_status") or "").lower())
-        order_status = "completed" if is_already_returned else "pending"
-        completed_at = now if is_already_returned else None
-
+        return_status = "Đã trả" if is_already_returned else "Chưa trả"
+        # "Đã trả toàn bộ" = đã trả thiết bị về kho, không đồng nghĩa là đã kiểm kê
+        # Trạng thái kiểm kê luôn bắt đầu bằng 'pending' để nhân viên kiểm tra đủ/thiếu
+        order_status = "pending"
+        completed_at = None
         init_snapshot_json = None
-        if is_already_returned:
-            init_snapshot = {
-                "round_number": 1,
-                "round_name": "Kiểm kê ban đầu khi nhận hàng trả",
-                "actor": "Hệ thống (CRM - Đã trả toàn bộ)",
-                "created_at": now,
-                "shortages": [],
-                "total_missing_qty": 0,
-                "total_compensation": 0,
-            }
-            init_snapshot_json = json.dumps(init_snapshot, ensure_ascii=False)
+
+        orig_info = {
+            "team_name": order["team_name"],
+            "returner_name": order["returner_name"],
+            "phone": order["phone"],
+            "email": order.get("email", ""),
+            "due_date": order.get("due_date", ""),
+            "delivery_address": order.get("address", ""),
+            "note": order.get("note", ""),
+            "return_status": return_status,
+        }
+        orig_info_json = json.dumps(orig_info, ensure_ascii=False)
 
         cur = conn.execute(
             """
             INSERT INTO rentals (
                 code, crm_order_no, returner_name, team_name, phone, email,
-                delivery_address, due_date, note, status, completed_at, initial_inspection_json, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                delivery_address, due_date, note, status, return_status,
+                completed_at, initial_inspection_json, original_info_json, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 ticket_code,
@@ -487,8 +491,10 @@ def import_crm_orders(conn, catalog: dict, orders_data: list, actor: str = "Ngư
                 order.get("due_date", ""),
                 order.get("note", ""),
                 order_status,
+                return_status,
                 completed_at,
                 init_snapshot_json,
+                orig_info_json,
                 now,
                 now,
             ),

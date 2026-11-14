@@ -1418,17 +1418,25 @@
   // --- VIEW 2: Teams List ---
   function getRentalStatusBadge(rental) {
     const sum = rental.summary || {};
+    const retStatus = rental.return_status || "Đã trả";
+    const isReturned = retStatus === "Đã trả";
+    const retBadge = `<span class="badge-return ${isReturned ? 'badge-returned' : 'badge-unreturned'}">${escapeHtml(retStatus)}</span>`;
+
+    let inspectBadge = "";
     if (rental.status === "completed") {
       if (sum.shortage_items_count > 0) {
-        return `<span class="status-pill status-shortage">Hoàn tất · Thiếu ${sum.shortage_items_count} món</span>`;
+        inspectBadge = `<span class="status-pill status-shortage">Thiếu ${sum.shortage_items_count} món</span>`;
+      } else {
+        inspectBadge = `<span class="status-pill status-completed">Đủ 100%</span>`;
       }
-      return `<span class="status-pill status-completed">Hoàn tất · Đủ 100%</span>`;
-    }
-    if (rental.status === "inspecting") {
+    } else if (rental.status === "inspecting") {
       const missText = sum.shortage_items_count > 0 ? ` · Thiếu ${sum.shortage_items_count}` : "";
-      return `<span class="status-pill status-inspecting">Đang kiểm (${sum.checked_count}/${sum.total_items})${missText}</span>`;
+      inspectBadge = `<span class="status-pill status-inspecting">Đang kiểm (${sum.checked_count}/${sum.total_items})${missText}</span>`;
+    } else {
+      inspectBadge = `<span class="status-pill status-pending">Chưa kiểm kê</span>`;
     }
-    return `<span class="status-pill status-pending">Chờ kiểm kê</span>`;
+
+    return `<div style="display:flex; flex-direction:column; align-items:flex-start; gap:3px;">${retBadge}${inspectBadge}</div>`;
   }
 
   function getOverdueInfo(rental) {
@@ -1486,7 +1494,7 @@
       if (f === "overdue" && !getOverdueInfo(r).isOverdue) return false;
       if (f === "pending" && r.status !== "pending") return false;
       if (f === "inspecting" && r.status !== "inspecting") return false;
-      if (f === "completed" && r.status !== "completed") return false;
+      if (f === "sufficient" && (r.status !== "completed" || (r.summary?.shortage_items_count || 0) > 0)) return false;
       if (f === "has_shortage" && (r.summary?.shortage_items_count || 0) === 0) return false;
       if (q) {
         const kitsText = (r.kits || []).map((k) => `${k.display_label} ${k.kit_code || ""}`).join(" ");
@@ -1522,16 +1530,25 @@
         ? `<button class="btn btn-warning btn-sm act-supplementary" title="Khách mang trả thêm linh kiện bị thiếu">+ Trả bổ sung</button>`
         : "";
 
+      const editBtnHtml = `<button class="btn btn-outline btn-sm act-edit-info" title="Sửa thông tin đơn thuê">✏️ Sửa</button>`;
+      const addItemsBtnHtml = `<button class="btn btn-outline btn-sm act-add-items" title="Thêm bộ hoặc linh kiện lẻ">+ Thêm đồ</button>`;
+
       const actionsHtml = isCompleted
         ? `
+          ${editBtnHtml}
+          ${addItemsBtnHtml}
           ${suppBtnHtml}
           <button class="btn btn-primary btn-sm act-report">Xem báo cáo</button>
         `
         : isPending
         ? `
+          ${editBtnHtml}
+          ${addItemsBtnHtml}
           <button class="btn btn-primary btn-sm act-inspect">Kiểm kê</button>
         `
         : `
+          ${editBtnHtml}
+          ${addItemsBtnHtml}
           <button class="btn btn-primary btn-sm act-inspect">Kiểm kê</button>
           <button class="btn btn-outline btn-sm act-report">Thống kê</button>
         `;
@@ -1551,6 +1568,14 @@
           : `<div><span class="badge-due">Hạn: ${escapeHtml(r.due_date)}</span></div>`
         : `<span class="muted text-sm">—</span>`;
 
+      let teamSubHtml = "";
+      if (r.is_edited) {
+        teamSubHtml += `<div style="margin-top:4px;"><button type="button" class="btn-xs-pill btn-orig-info act-view-orig" data-id="${r.id}" title="Xem thông tin gốc trước khi sửa">🕒 Đã sửa (Xem gốc)</button></div>`;
+      }
+      if (r.has_added_items) {
+        teamSubHtml += `<div style="margin-top:4px;"><button type="button" class="btn-xs-pill btn-added-items act-view-added" data-id="${r.id}" title="Xem các bộ / linh kiện được thêm vào">🧩 +Đã thêm đồ (So sánh)</button></div>`;
+      }
+
       tr.innerHTML = `
         <td class="col-code">
           <div title="${r.crm_order_no ? `CRM: ${escapeHtml(r.crm_order_no)}` : ''}"><span class="code-pill">${escapeHtml(r.code)}</span></div>
@@ -1558,6 +1583,7 @@
         </td>
         <td class="col-team">
           <strong style="color:var(--text); font-size:13.5px;">${escapeHtml(r.team_name)}</strong>
+          ${teamSubHtml}
         </td>
         <td class="col-contact">
           <div><strong>${escapeHtml(r.returner_name)}</strong></div>
@@ -1597,6 +1623,28 @@
       const suppBtn = tr.querySelector(".act-supplementary");
       if (suppBtn) {
         suppBtn.addEventListener("click", () => openSupplementaryModal(r.id));
+      }
+      const editBtn = tr.querySelector(".act-edit-info");
+      if (editBtn) {
+        editBtn.addEventListener("click", () => openEditRentalInfoModal(r.id));
+      }
+      const addBtn = tr.querySelector(".act-add-items");
+      if (addBtn) {
+        addBtn.addEventListener("click", () => openAddRentalItemsModal(r.id));
+      }
+      const viewOrigBtn = tr.querySelector(".act-view-orig");
+      if (viewOrigBtn) {
+        viewOrigBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          openViewOriginalInfoModal(r.id);
+        });
+      }
+      const viewAddedBtn = tr.querySelector(".act-view-added");
+      if (viewAddedBtn) {
+        viewAddedBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          openCompareAddedKitsModal(r.id);
+        });
       }
 
       tbody.appendChild(tr);
@@ -1903,11 +1951,40 @@
     $("insp-note-wrap").hidden = !rental.note;
     $("insp-note").textContent = rental.note || "";
 
+    const returnBadge = $("insp-badge-return");
+    if (returnBadge) {
+      const retStat = rental.return_status || "Đã trả";
+      returnBadge.textContent = retStat;
+      returnBadge.className = `badge-return ${retStat === "Đã trả" ? "badge-returned" : "badge-unreturned"}`;
+    }
+
+    const btnViewOrig = $("insp-btn-view-orig");
+    if (btnViewOrig) {
+      btnViewOrig.hidden = !rental.is_edited;
+      btnViewOrig.onclick = () => openViewOriginalInfoModal(rental.id);
+    }
+
+    const btnViewAdded = $("insp-btn-view-added");
+    if (btnViewAdded) {
+      btnViewAdded.hidden = !rental.has_added_items;
+      btnViewAdded.onclick = () => openCompareAddedKitsModal(rental.id);
+    }
+
+    const btnEditInfo = $("btn-inspect-edit-info");
+    if (btnEditInfo) {
+      btnEditInfo.onclick = () => openEditRentalInfoModal(rental.id);
+    }
+
+    const btnAddItems = $("btn-inspect-add-items");
+    if (btnAddItems) {
+      btnAddItems.onclick = () => openAddRentalItemsModal(rental.id);
+    }
+
     const sp = $("insp-status-pill");
     sp.className = `status-pill status-${rental.status}`;
     sp.textContent =
       rental.status === "completed"
-        ? "Đã hoàn tất"
+        ? (rental.summary.shortage_items_count > 0 ? `Đã kiểm · Thiếu ${rental.summary.shortage_items_count} món` : "Đã kiểm · Đủ 100%")
         : rental.status === "inspecting"
         ? "Đang kiểm kê"
         : "Chờ kiểm kê";
@@ -1934,7 +2011,8 @@
       const btn = document.createElement("button");
       btn.className = `kit-tab ${state.activeKitTab === kd.rental_kit_id ? "active" : ""}`;
       btn.dataset.rkId = String(kd.rental_kit_id);
-      btn.innerHTML = `<span class="tab-label">${escapeHtml(kd.display_label)}</span> <span>(${
+      const addedTag = kd.is_added_after ? ' <em style="font-size:10px; color:var(--green); font-weight:700;">[+Thêm]</em>' : '';
+      btn.innerHTML = `<span class="tab-label">${escapeHtml(kd.display_label)}${addedTag}</span> <span>(${
         kd.total_items
       })</span><span class="tab-miss" ${kd.missing_items_count === 0 ? "hidden" : ""}>Thiếu ${
         kd.missing_items_count
@@ -3891,6 +3969,59 @@
     });
     $("btn-submit-supplementary")?.addEventListener("click", submitSupplementaryReturn);
 
+    // Edit Rental Info Modal Handlers
+    const closeEditInfoModal = () => {
+      $("modal-edit-rental-info").hidden = true;
+    };
+    $("btn-close-edit-info")?.addEventListener("click", closeEditInfoModal);
+    $("btn-cancel-edit-info")?.addEventListener("click", closeEditInfoModal);
+    $("modal-edit-rental-info")?.addEventListener("click", (e) => {
+      if (e.target === $("modal-edit-rental-info")) closeEditInfoModal();
+    });
+    $("btn-submit-edit-info")?.addEventListener("click", submitEditRentalInfo);
+
+    // View Original Info Modal Handlers
+    const closeOrigInfoModal = () => {
+      $("modal-view-original-info").hidden = true;
+    };
+    $("btn-close-orig-info")?.addEventListener("click", closeOrigInfoModal);
+    $("btn-close-orig-info-foot")?.addEventListener("click", closeOrigInfoModal);
+    $("modal-view-original-info")?.addEventListener("click", (e) => {
+      if (e.target === $("modal-view-original-info")) closeOrigInfoModal();
+    });
+
+    // Add Items Modal Handlers
+    const closeAddItemsModal = () => {
+      $("modal-add-rental-items").hidden = true;
+    };
+    $("btn-close-add-items")?.addEventListener("click", closeAddItemsModal);
+    $("btn-cancel-add-items")?.addEventListener("click", closeAddItemsModal);
+    $("modal-add-rental-items")?.addEventListener("click", (e) => {
+      if (e.target === $("modal-add-rental-items")) closeAddItemsModal();
+    });
+    $("btn-submit-add-items")?.addEventListener("click", submitAddRentalItems);
+
+    document.querySelectorAll(".tab-add-type").forEach((tabBtn) => {
+      tabBtn.addEventListener("click", () => {
+        document.querySelectorAll(".tab-add-type").forEach((b) => b.classList.remove("active"));
+        tabBtn.classList.add("active");
+        const targetId = tabBtn.dataset.tab;
+        document.querySelectorAll(".tab-add-pane").forEach((pane) => {
+          pane.hidden = pane.id !== targetId;
+        });
+      });
+    });
+
+    // Compare Added Kits Modal Handlers
+    const closeCompareKitsModal = () => {
+      $("modal-compare-added-kits").hidden = true;
+    };
+    $("btn-close-compare-kits")?.addEventListener("click", closeCompareKitsModal);
+    $("btn-close-compare-kits-foot")?.addEventListener("click", closeCompareKitsModal);
+    $("modal-compare-added-kits")?.addEventListener("click", (e) => {
+      if (e.target === $("modal-compare-added-kits")) closeCompareKitsModal();
+    });
+
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {
         $("img-modal").hidden = true;
@@ -3902,6 +4033,10 @@
         $("modal-missing-kit-code").hidden = true;
         $("modal-unentered-kits").hidden = true;
         $("modal-supplementary").hidden = true;
+        $("modal-edit-rental-info").hidden = true;
+        $("modal-view-original-info").hidden = true;
+        $("modal-add-rental-items").hidden = true;
+        $("modal-compare-added-kits").hidden = true;
       }
     });
 
@@ -3920,6 +4055,325 @@
         );
       }
     });
+  }
+
+  // --- Modal Functions: Edit Info, View Original, Add Items, Compare Added ---
+  async function openEditRentalInfoModal(rentalId) {
+    try {
+      const data = await api(`/api/rentals/${rentalId}`);
+      const r = data.rental;
+      $("edit-info-rental-id").value = r.id;
+      $("edit-info-ticket-code").textContent = r.code;
+      $("edit-info-team").value = r.team_name || "";
+      $("edit-info-returner").value = r.returner_name || "";
+      $("edit-info-phone").value = r.phone || "";
+      $("edit-info-email").value = r.email || "";
+      $("edit-info-due-date").value = r.due_date ? String(r.due_date).slice(0, 10) : "";
+      $("edit-info-return-status").value = r.return_status || "Đã trả";
+      $("edit-info-address").value = r.delivery_address || "";
+      $("edit-info-note").value = r.note || "";
+      $("edit-info-actor").value = "Quản trị viên";
+
+      const btnViewOrig = $("btn-edit-info-view-orig");
+      if (btnViewOrig) {
+        btnViewOrig.hidden = !r.is_edited;
+        btnViewOrig.onclick = () => {
+          $("modal-edit-rental-info").hidden = true;
+          openViewOriginalInfoModal(r.id);
+        };
+      }
+
+      $("modal-edit-rental-info").hidden = false;
+    } catch (err) {
+      showToast(err.message, "error");
+    }
+  }
+
+  async function submitEditRentalInfo() {
+    const rentalId = $("edit-info-rental-id").value;
+    if (!rentalId) return;
+
+    const payload = {
+      team_name: $("edit-info-team").value.trim(),
+      returner_name: $("edit-info-returner").value.trim(),
+      phone: $("edit-info-phone").value.trim(),
+      email: $("edit-info-email").value.trim(),
+      due_date: $("edit-info-due-date").value.trim(),
+      return_status: $("edit-info-return-status").value,
+      delivery_address: $("edit-info-address").value.trim(),
+      note: $("edit-info-note").value.trim(),
+      actor: $("edit-info-actor").value.trim() || "Quản trị viên",
+    };
+
+    if (!payload.team_name || !payload.returner_name || !payload.phone) {
+      showToast("Vui lòng điền đủ Tên đội, Người nhận và SĐT", "error");
+      return;
+    }
+
+    try {
+      const res = await api(`/api/rentals/${rentalId}`, {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+      $("modal-edit-rental-info").hidden = true;
+      showToast("Đã cập nhật thông tin đơn thuê thành công!", "success");
+      await loadRentals();
+      if (state.activeRental && state.activeRental.id === Number(rentalId)) {
+        state.activeRental = res.rental;
+        renderInspectionWorkspace();
+      }
+    } catch (err) {
+      showToast("Lỗi cập nhật: " + err.message, "error");
+    }
+  }
+
+  async function openViewOriginalInfoModal(rentalId) {
+    try {
+      const data = await api(`/api/rentals/${rentalId}`);
+      const r = data.rental;
+      $("orig-info-ticket-code").textContent = r.code;
+
+      const orig = r.original_info || {};
+      const fields = [
+        { key: "team_name", label: "Khách hàng / Đội thuê", orig: orig.team_name, curr: r.team_name },
+        { key: "returner_name", label: "Người nhận / Người trả", orig: orig.returner_name, curr: r.returner_name },
+        { key: "phone", label: "Số điện thoại", orig: orig.phone, curr: r.phone },
+        { key: "email", label: "Email", orig: orig.email, curr: r.email },
+        { key: "due_date", label: "Hạn trả hàng", orig: orig.due_date, curr: r.due_date },
+        { key: "delivery_address", label: "Địa chỉ giao hàng", orig: orig.delivery_address, curr: r.delivery_address },
+        { key: "return_status", label: "Tình trạng trả thiết bị", orig: orig.return_status, curr: r.return_status },
+        { key: "note", label: "Ghi chú", orig: orig.note, curr: r.note },
+      ];
+
+      const tbody = $("orig-info-tbody");
+      tbody.innerHTML = "";
+      for (const f of fields) {
+        const oVal = String(f.orig || "").trim();
+        const cVal = String(f.curr || "").trim();
+        const isChanged = oVal !== cVal;
+
+        const tr = document.createElement("tr");
+        if (isChanged) tr.classList.add("diff-row-changed");
+        tr.innerHTML = `
+          <td><strong>${escapeHtml(f.label)}</strong></td>
+          <td style="color:var(--text);">${escapeHtml(oVal || "—")}</td>
+          <td><strong style="color:${isChanged ? 'var(--blue)' : 'var(--text)'};">${escapeHtml(cVal || "—")}</strong></td>
+          <td style="text-align:center;">
+            ${isChanged ? '<span class="diff-tag-changed">Đã sửa</span>' : '<span class="diff-tag-same">Giữ nguyên</span>'}
+          </td>
+        `;
+        tbody.appendChild(tr);
+      }
+
+      // Render logs
+      const logsBox = $("orig-info-logs");
+      const editLogs = (r.change_logs || []).filter((l) => l.action === "EDIT_INFO");
+      if (editLogs.length === 0) {
+        logsBox.innerHTML = `<span class="muted">Chưa ghi nhận lượt chỉnh sửa nào.</span>`;
+      } else {
+        logsBox.innerHTML = editLogs
+          .map(
+            (l) => `
+          <div style="padding:4px 0; border-bottom:1px solid var(--border);">
+            <span class="muted">${escapeHtml(l.created_at)}</span> · 
+            <strong>${escapeHtml(l.actor)}</strong>: 
+            <span>${escapeHtml(l.summary)}</span>
+          </div>
+        `
+          )
+          .join("");
+      }
+
+      $("modal-view-original-info").hidden = false;
+    } catch (err) {
+      showToast(err.message, "error");
+    }
+  }
+
+  let addItemsCurrentRentalId = null;
+
+  async function openAddRentalItemsModal(rentalId) {
+    addItemsCurrentRentalId = rentalId;
+    try {
+      const data = await api(`/api/rentals/${rentalId}`);
+      const r = data.rental;
+      $("add-item-ticket-code").textContent = r.code;
+
+      // Populate Tab 1: Kits from catalog
+      const kitSelect = $("add-kit-select");
+      kitSelect.innerHTML = (state.catalog?.kits || [])
+        .map((k) => `<option value="${escapeHtml(k.id)}">${escapeHtml(k.name)} (${k.total_items} linh kiện)</option>`)
+        .join("");
+      $("add-kit-code").value = "";
+
+      // Populate Tab 2: Source kits and components
+      const sourceKitSelect = $("add-cat-source-kit");
+      sourceKitSelect.innerHTML = (state.catalog?.kits || [])
+        .map((k) => `<option value="${escapeHtml(k.id)}">${escapeHtml(k.name)}</option>`)
+        .join("");
+      
+      const populateCatItems = () => {
+        const selectedKid = sourceKitSelect.value;
+        const matchedKit = (state.catalog?.kits || []).find((k) => k.id === selectedKid);
+        const itemSelect = $("add-cat-item-select");
+        if (!matchedKit || !matchedKit.items) {
+          itemSelect.innerHTML = "<option value=''>Không có linh kiện</option>";
+          return;
+        }
+        itemSelect.innerHTML = matchedKit.items
+          .map(
+            (it) => `
+            <option value="${escapeHtml(it.id)}" data-price="${it.unit_price || 0}" data-unit="${escapeHtml(it.unit || 'cái')}" data-code="${escapeHtml(it.code || '')}">
+              ${escapeHtml(it.name)} ${it.code ? `[${it.code}]` : ''} · ${formatMoney(it.unit_price || 0)}
+            </option>
+          `
+          )
+          .join("");
+        updateCatItemPreview();
+      };
+
+      const updateCatItemPreview = () => {
+        const itemSelect = $("add-cat-item-select");
+        const opt = itemSelect.selectedOptions[0];
+        const preview = $("add-cat-item-preview");
+        if (!opt) {
+          preview.style.display = "none";
+          return;
+        }
+        const price = Number(opt.dataset.price || 0);
+        const unit = opt.dataset.unit || "cái";
+        const code = opt.dataset.code || "—";
+        const qty = Number($("add-cat-item-qty").value || 1);
+        preview.style.display = "block";
+        preview.innerHTML = `
+          <div><strong>Mã linh kiện:</strong> ${escapeHtml(code)} · <strong>Đơn vị:</strong> ${escapeHtml(unit)}</div>
+          <div style="margin-top:3px;"><strong>Đơn giá bồi thường:</strong> ${formatMoney(price)} / ${escapeHtml(unit)} · <strong>Thành tiền dự kiến:</strong> ${formatMoney(price * qty)}</div>
+        `;
+      };
+
+      sourceKitSelect.onchange = populateCatItems;
+      $("add-cat-item-select").onchange = updateCatItemPreview;
+      $("add-cat-item-qty").oninput = updateCatItemPreview;
+      populateCatItems();
+
+      // Reset Tab 3
+      $("add-custom-name").value = "";
+      $("add-custom-qty").value = "1";
+      $("add-custom-price").value = "";
+      $("add-custom-unit").value = "cái";
+      $("add-custom-note").value = "";
+
+      // Reset tabs
+      document.querySelectorAll(".tab-add-type").forEach((t) => t.classList.toggle("active", t.dataset.tab === "tab-add-kit"));
+      $("tab-add-kit").hidden = false;
+      $("tab-add-cat-item").hidden = true;
+      $("tab-add-custom").hidden = true;
+
+      $("modal-add-rental-items").hidden = false;
+    } catch (err) {
+      showToast(err.message, "error");
+    }
+  }
+
+  async function submitAddRentalItems() {
+    if (!addItemsCurrentRentalId) return;
+    const activeTab = document.querySelector(".tab-add-type.active")?.dataset.tab;
+    const actor = $("add-item-actor").value.trim() || "Quản trị viên";
+
+    let payload = { actor };
+    if (activeTab === "tab-add-kit") {
+      payload.item_type = "kit";
+      payload.kit_id = $("add-kit-select").value;
+      payload.kit_code = $("add-kit-code").value.trim();
+    } else if (activeTab === "tab-add-cat-item") {
+      payload.item_type = "catalog_item";
+      payload.source_kit_id = $("add-cat-source-kit").value;
+      payload.item_id = $("add-cat-item-select").value;
+      payload.qty = Number($("add-cat-item-qty").value || 1);
+    } else if (activeTab === "tab-add-custom") {
+      payload.item_type = "custom_item";
+      payload.name = $("add-custom-name").value.trim();
+      payload.qty = Number($("add-custom-qty").value || 1);
+      payload.unit_price = Number($("add-custom-price").value || 0);
+      payload.unit = $("add-custom-unit").value.trim() || "cái";
+      payload.note = $("add-custom-note").value.trim();
+      if (!payload.name) {
+        showToast("Vui lòng nhập tên sản phẩm / linh kiện", "error");
+        return;
+      }
+    }
+
+    try {
+      const res = await api(`/api/rentals/${addItemsCurrentRentalId}/add-items`, {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      $("modal-add-rental-items").hidden = true;
+      showToast("Đã thêm vào đơn thuê thành công!", "success");
+      await loadRentals();
+      if (state.activeRental && state.activeRental.id === Number(addItemsCurrentRentalId)) {
+        state.activeRental = res.rental;
+        renderInspectionWorkspace();
+      }
+    } catch (err) {
+      showToast("Lỗi thêm linh kiện: " + err.message, "error");
+    }
+  }
+
+  async function openCompareAddedKitsModal(rentalId) {
+    try {
+      const data = await api(`/api/rentals/${rentalId}`);
+      const r = data.rental;
+      $("compare-kits-ticket-code").textContent = r.code;
+
+      const origBox = $("compare-orig-kits-list");
+      const origList = r.original_kits_summary || [];
+      if (origList.length === 0) {
+        origBox.innerHTML = `<span class="muted text-sm">Không có dữ liệu bộ gốc.</span>`;
+      } else {
+        origBox.innerHTML = origList
+          .map(
+            (k) => `
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid var(--border);">
+            <span><strong>${escapeHtml(k.display_label || k.kit_name)}</strong></span>
+            <span class="muted text-sm">${k.total_items} linh kiện</span>
+          </div>
+        `
+          )
+          .join("");
+      }
+
+      const addedBox = $("compare-added-kits-list");
+      const addedList = r.added_kits_summary || [];
+      if (addedList.length === 0) {
+        addedBox.innerHTML = `<span class="muted text-sm">Chưa có linh kiện hoặc bộ nào được thêm bổ sung vào đơn này.</span>`;
+      } else {
+        addedBox.innerHTML = addedList
+          .map(
+            (it) => `
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid var(--border);">
+            <div>
+              <strong style="color:var(--green);">${escapeHtml(it.display_label || it.item_name || it.kit_name)}</strong>
+              ${it.unit_price ? `<div class="muted text-sm">Đơn giá: ${formatMoney(it.unit_price)}</div>` : ''}
+            </div>
+            <div>
+              <span class="badge-return badge-returned">+ ${it.qty || it.total_items || 1} ${escapeHtml(it.unit || 'món')}</span>
+            </div>
+          </div>
+        `
+          )
+          .join("");
+      }
+
+      $("btn-compare-open-add-modal").onclick = () => {
+        $("modal-compare-added-kits").hidden = true;
+        openAddRentalItemsModal(r.id);
+      };
+
+      $("modal-compare-added-kits").hidden = false;
+    } catch (err) {
+      showToast(err.message, "error");
+    }
   }
 
   // --- Boot ---

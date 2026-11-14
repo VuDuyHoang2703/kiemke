@@ -222,6 +222,13 @@ def api_list_rentals():
                     "email": detail.get("email") or "",
                     "note": detail["note"],
                     "status": detail["status"],
+                    "return_status": detail.get("return_status") or "Đã trả",
+                    "is_edited": detail.get("is_edited", False),
+                    "has_added_items": detail.get("has_added_items", False),
+                    "added_kits_summary": detail.get("added_kits_summary") or [],
+                    "original_kits_summary": detail.get("original_kits_summary") or [],
+                    "info_diff": detail.get("info_diff") or [],
+                    "original_info": detail.get("original_info") or {},
                     "created_at": detail["created_at"],
                     "updated_at": detail["updated_at"],
                     "completed_at": detail["completed_at"],
@@ -393,6 +400,18 @@ def api_create_rental():
         if dup_err:
             return jsonify({"error": dup_err, "conflict": dup_conflict}), 400
 
+        orig_dict = {
+            "team_name": team_name,
+            "returner_name": returner_name,
+            "phone": phone,
+            "email": email,
+            "due_date": "",
+            "delivery_address": "",
+            "note": note,
+            "return_status": "Đã trả",
+        }
+        orig_json = json.dumps(orig_dict, ensure_ascii=False)
+
         rental_id = None
         code = None
         for attempt in range(5):
@@ -400,10 +419,10 @@ def api_create_rental():
             try:
                 cur = conn.execute(
                     """
-                    INSERT INTO rentals (code, returner_name, team_name, phone, email, note, status, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+                    INSERT INTO rentals (code, returner_name, team_name, phone, email, note, status, return_status, original_info_json, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, 'pending', 'Đã trả', ?, ?, ?)
                     """,
-                    (code, returner_name, team_name, phone, email, note, ts, ts),
+                    (code, returner_name, team_name, phone, email, note, orig_json, ts, ts),
                 )
                 rental_id = cur.lastrowid
                 break
@@ -460,16 +479,280 @@ def api_get_rental(rental_id):
     return jsonify({"rental": detail})
 
 
-@app.route("/api/rentals/<int:rental_id>", methods=["PUT"])
+@app.route("/api/rentals/<int:rental_id>", methods=["PUT", "PATCH"])
 def api_update_rental(rental_id):
-    return (
-        jsonify(
-            {
-                "error": "Toàn bộ thông tin phiếu đã tiếp nhận không được phép chỉnh sửa. Nếu nhập sai, vui lòng xoá phiếu cũ (có xác nhận lý do) và lập phiếu mới."
+    _, catalog_by_id = load_catalog()
+    data = request.get_json(silent=True) or {}
+    actor = (data.get("actor") or "Quản trị viên").strip()
+
+    with get_conn(DB_PATH) as conn:
+        row = conn.execute(
+            "SELECT * FROM rentals WHERE id = ? AND deleted_at IS NULL", (rental_id,)
+        ).fetchone()
+        if not row:
+            return jsonify({"error": "Không tìm thấy phiếu kiểm kê"}), 404
+
+        # Snapshot original info if not already captured
+        orig_json = row["original_info_json"]
+        if not orig_json:
+            orig_dict = {
+                "team_name": row["team_name"],
+                "returner_name": row["returner_name"],
+                "phone": row["phone"],
+                "email": row["email"] or "",
+                "due_date": row["due_date"] or "",
+                "delivery_address": row["delivery_address"] or "",
+                "note": row["note"] or "",
+                "return_status": row["return_status"] or "Đã trả",
             }
-        ),
-        403,
-    )
+            orig_json = json.dumps(orig_dict, ensure_ascii=False)
+            conn.execute(
+                "UPDATE rentals SET original_info_json = ? WHERE id = ?",
+                (orig_json, rental_id),
+            )
+
+        new_team_name = data.get("team_name", row["team_name"]).strip()
+        new_returner_name = data.get("returner_name", row["returner_name"]).strip()
+        new_phone = data.get("phone", row["phone"]).strip()
+        new_email = data.get("email", row["email"] or "").strip()
+        new_due_date = data.get("due_date", row["due_date"] or "").strip()
+        new_delivery_address = data.get("delivery_address", row["delivery_address"] or "").strip()
+        new_return_status = data.get("return_status", row["return_status"] or "Đã trả").strip()
+        new_note = data.get("note", row["note"] or "").strip()
+
+        fields_check = [
+            ("team_name", "Khách hàng / Đội thuê", row["team_name"], new_team_name),
+            ("returner_name", "Người nhận / Người trả", row["returner_name"], new_returner_name),
+            ("phone", "Số điện thoại", row["phone"], new_phone),
+            ("email", "Email", row["email"] or "", new_email),
+            ("due_date", "Hạn trả", row["due_date"] or "", new_due_date),
+            ("delivery_address", "Địa chỉ giao hàng", row["delivery_address"] or "", new_delivery_address),
+            ("return_status", "Tình trạng trả thiết bị", row["return_status"] or "Đã trả", new_return_status),
+            ("note", "Ghi chú", row["note"] or "", new_note),
+        ]
+
+        diff = []
+        for field, label, old_val, new_val in fields_check:
+            if str(old_val).strip() != str(new_val).strip():
+                diff.append({"field": field, "label": label, "old_val": str(old_val).strip(), "new_val": str(new_val).strip()})
+
+        now = now_iso()
+        conn.execute(
+            """
+            UPDATE rentals SET
+                team_name = ?,
+                returner_name = ?,
+                phone = ?,
+                email = ?,
+                due_date = ?,
+                delivery_address = ?,
+                return_status = ?,
+                note = ?,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                new_team_name,
+                new_returner_name,
+                new_phone,
+                new_email,
+                new_due_date,
+                new_delivery_address,
+                new_return_status,
+                new_note,
+                now,
+                rental_id,
+            ),
+        )
+
+        if diff:
+            diff_labels = ", ".join(d["label"] for d in diff)
+            record_change_log(
+                conn,
+                rental_id=rental_id,
+                action="EDIT_INFO",
+                actor=actor,
+                actor_role="admin",
+                summary=f"Chỉnh sửa thông tin đơn: {diff_labels}",
+                details=json.dumps({"diff": diff, "updated_at": now}, ensure_ascii=False),
+            )
+
+        updated_row = conn.execute("SELECT * FROM rentals WHERE id = ?", (rental_id,)).fetchone()
+        detail = build_rental_detail(conn, updated_row, catalog_by_id)
+
+    return jsonify({"ok": True, "rental": detail})
+
+
+@app.route("/api/rentals/<int:rental_id>/add-items", methods=["POST"])
+def api_add_rental_items(rental_id):
+    _, catalog_by_id = load_catalog()
+    data = request.get_json(silent=True) or {}
+    item_type = data.get("item_type", "custom_item")
+    actor = (data.get("actor") or "Admin").strip()
+
+    with get_conn(DB_PATH) as conn:
+        row = conn.execute(
+            "SELECT * FROM rentals WHERE id = ? AND deleted_at IS NULL", (rental_id,)
+        ).fetchone()
+        if not row:
+            return jsonify({"error": "Không tìm thấy phiếu kiểm kê"}), 404
+
+        now = now_iso()
+
+        if item_type == "kit":
+            kit_id = data.get("kit_id")
+            if not kit_id or kit_id not in catalog_by_id:
+                return jsonify({"error": "Không tìm thấy mã bộ trong catalog"}), 400
+            cat_kit = catalog_by_id[kit_id]
+            kit_code = (data.get("kit_code") or "").strip()
+
+            existing_count = conn.execute(
+                "SELECT COUNT(*) FROM rental_kits WHERE rental_id = ? AND kit_id = ?",
+                (rental_id, kit_id),
+            ).fetchone()[0]
+            instance_index = existing_count + 1
+
+            conn.execute(
+                """
+                INSERT INTO rental_kits (
+                    rental_id, kit_id, kit_name, instance_index, kit_code, kit_count, is_added_after
+                ) VALUES (?, ?, ?, ?, ?, 1, 1)
+                """,
+                (rental_id, kit_id, cat_kit["name"], instance_index, kit_code),
+            )
+            record_change_log(
+                conn,
+                rental_id=rental_id,
+                action="ADD_KIT",
+                actor=actor,
+                actor_role="admin",
+                summary=f"Thêm bộ bổ sung: {cat_kit['name']}" + (f" [{kit_code}]" if kit_code else ""),
+                details=json.dumps({"kit_id": kit_id, "kit_name": cat_kit["name"], "kit_code": kit_code, "instance_index": instance_index}, ensure_ascii=False),
+            )
+
+        elif item_type == "catalog_item":
+            source_kit_id = data.get("source_kit_id")
+            item_id = data.get("item_id")
+            qty = max(1.0, float(data.get("qty", 1)))
+            cat_kit = catalog_by_id.get(source_kit_id)
+            if not cat_kit:
+                return jsonify({"error": "Không tìm thấy bộ nguồn"}), 400
+            matched_item = next((it for it in cat_kit["items"] if str(it["id"]) == str(item_id)), None)
+            if not matched_item:
+                return jsonify({"error": "Không tìm thấy linh kiện trong bộ"}), 400
+
+            new_item_obj = {
+                "id": f"added_{item_id}_{int(datetime.now().timestamp()*1000)}",
+                "name": matched_item["name"],
+                "code": matched_item.get("code") or "",
+                "unit": matched_item.get("unit") or "cái",
+                "unit_price": matched_item.get("unit_price") or 0,
+                "qty": qty,
+                "expected_qty": qty,
+                "images": matched_item.get("images") or [],
+                "source_kit_name": cat_kit["name"],
+                "is_added_after": True,
+                "added_at": now,
+            }
+
+            loose_rk = conn.execute(
+                "SELECT * FROM rental_kits WHERE rental_id = ? AND kit_id = 'phu_kien_le' LIMIT 1",
+                (rental_id,),
+            ).fetchone()
+            if loose_rk:
+                existing_items = []
+                try:
+                    existing_items = json.loads(loose_rk["custom_items_json"] or "[]")
+                except Exception:
+                    existing_items = []
+                existing_items.append(new_item_obj)
+                conn.execute(
+                    "UPDATE rental_kits SET custom_items_json = ? WHERE id = ?",
+                    (json.dumps(existing_items, ensure_ascii=False), loose_rk["id"]),
+                )
+            else:
+                conn.execute(
+                    """
+                    INSERT INTO rental_kits (
+                        rental_id, kit_id, kit_name, instance_index, kit_code, kit_count, is_added_after, custom_items_json
+                    ) VALUES (?, 'phu_kien_le', 'Linh kiện bổ sung', 1, '', 1, 1, ?)
+                    """,
+                    (rental_id, json.dumps([new_item_obj], ensure_ascii=False)),
+                )
+
+            record_change_log(
+                conn,
+                rental_id=rental_id,
+                action="ADD_COMPONENT",
+                actor=actor,
+                actor_role="admin",
+                summary=f"Thêm linh kiện bổ sung: {matched_item['name']} (SL: {qty:g} {matched_item.get('unit', 'cái')})",
+                details=json.dumps(new_item_obj, ensure_ascii=False),
+            )
+
+        elif item_type == "custom_item":
+            name = (data.get("name") or "").strip()
+            if not name:
+                return jsonify({"error": "Vui lòng nhập tên linh kiện/sản phẩm"}), 400
+            qty = max(1.0, float(data.get("qty", 1)))
+            unit_price = max(0.0, float(data.get("unit_price", 0)))
+            unit = (data.get("unit") or "cái").strip()
+            note = (data.get("note") or "").strip()
+
+            new_item_obj = {
+                "id": f"custom_{int(datetime.now().timestamp()*1000)}",
+                "name": name,
+                "code": (data.get("code") or "").strip(),
+                "unit": unit,
+                "unit_price": unit_price,
+                "qty": qty,
+                "expected_qty": qty,
+                "images": [],
+                "note": note,
+                "is_added_after": True,
+                "added_at": now,
+            }
+
+            loose_rk = conn.execute(
+                "SELECT * FROM rental_kits WHERE rental_id = ? AND kit_id = 'phu_kien_le' LIMIT 1",
+                (rental_id,),
+            ).fetchone()
+            if loose_rk:
+                existing_items = []
+                try:
+                    existing_items = json.loads(loose_rk["custom_items_json"] or "[]")
+                except Exception:
+                    existing_items = []
+                existing_items.append(new_item_obj)
+                conn.execute(
+                    "UPDATE rental_kits SET custom_items_json = ? WHERE id = ?",
+                    (json.dumps(existing_items, ensure_ascii=False), loose_rk["id"]),
+                )
+            else:
+                conn.execute(
+                    """
+                    INSERT INTO rental_kits (
+                        rental_id, kit_id, kit_name, instance_index, kit_code, kit_count, is_added_after, custom_items_json
+                    ) VALUES (?, 'phu_kien_le', 'Linh kiện bổ sung', 1, '', 1, 1, ?)
+                    """,
+                    (rental_id, json.dumps([new_item_obj], ensure_ascii=False)),
+                )
+
+            record_change_log(
+                conn,
+                rental_id=rental_id,
+                action="ADD_CUSTOM_ITEM",
+                actor=actor,
+                actor_role="admin",
+                summary=f"Thêm sản phẩm tùy chỉnh: {name} (SL: {qty:g} {unit}, đơn giá: {unit_price:,.0f} đ)",
+                details=json.dumps(new_item_obj, ensure_ascii=False),
+            )
+
+        conn.execute("UPDATE rentals SET updated_at = ? WHERE id = ?", (now, rental_id))
+        updated_row = conn.execute("SELECT * FROM rentals WHERE id = ?", (rental_id,)).fetchone()
+        detail = build_rental_detail(conn, updated_row, catalog_by_id)
+
+    return jsonify({"ok": True, "rental": detail})
 
 
 @app.route("/api/rentals/<int:rental_id>", methods=["DELETE"])
@@ -508,6 +791,13 @@ def api_list_deleted_rentals():
                     "email": detail.get("email") or "",
                     "note": detail["note"],
                     "status": detail["status"],
+                    "return_status": detail.get("return_status") or "Đã trả",
+                    "is_edited": detail.get("is_edited", False),
+                    "has_added_items": detail.get("has_added_items", False),
+                    "added_kits_summary": detail.get("added_kits_summary") or [],
+                    "original_kits_summary": detail.get("original_kits_summary") or [],
+                    "info_diff": detail.get("info_diff") or [],
+                    "original_info": detail.get("original_info") or {},
                     "created_at": detail["created_at"],
                     "updated_at": detail["updated_at"],
                     "completed_at": detail["completed_at"],
