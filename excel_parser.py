@@ -318,13 +318,24 @@ def extract_sheet_images(zf: zipfile.ZipFile, media_dir: Path):
                 if (y1 - y0) <= 1000:
                     continue
 
-                best_r = fr
-                best_ov = -1
-                for r in range(max(1, fr - 1), min(max_r + 10, tr + 3)):
-                    ov = min(y1, y_end[r]) - max(y0, y_start[r])
-                    if ov > best_ov:
-                        best_ov = ov
-                        best_r = r
+                if fr == tr:
+                    best_r = fr
+                else:
+                    best_r = fr
+                    best_ov = -1
+                    for r in range(fr, tr + 1):
+                        ry0 = y_start.get(r, 0)
+                        ry1 = y_end.get(r, 0)
+                        ov = min(y1, ry1) - max(y0, ry0)
+                        if ov > best_ov:
+                            best_ov = ov
+                            best_r = r
+                    if best_ov <= 0:
+                        y_mid = (y0 + y1) / 2.0
+                        for r in range(fr, tr + 1):
+                            if y_start.get(r, 0) <= y_mid < y_end.get(r, 0):
+                                best_r = r
+                                break
 
                 anchors_raw.append((best_r, fc, fco, f"/static/kit_images/{img_name}"))
 
@@ -634,8 +645,11 @@ def parse_workbook(xlsx_path: Path, static_dir: Path, output_json: Path):
 
 if __name__ == "__main__":
     base = Path(__file__).resolve().parent
+    xlsx = base / "data" / "KIEM KE HANG THUE.xlsx"
+    if not xlsx.exists():
+        xlsx = base / "KIEM KE HANG THUE.xlsx"
     cat = parse_workbook(
-        base / "KIEM KE HANG THUE.xlsx",
+        xlsx,
         base / "static",
         base / "data" / "catalog.json",
     )

@@ -11,7 +11,7 @@
       "has_fixed_qty": true,
       "total_items": 86,
       "total_pieces": 378,
-      "preview_image": "/kit-covers/AlphaA.png?v=1794380699",
+      "preview_image": "/static/kit_images/image1.png",
       "sections": [],
       "items": [
         {
@@ -2199,7 +2199,7 @@
       "has_fixed_qty": true,
       "total_items": 92,
       "total_pieces": 451,
-      "preview_image": "/kit-covers/AlphaB.png?v=1794380645",
+      "preview_image": "/static/kit_images/image89.png",
       "sections": [],
       "items": [
         {
@@ -4561,7 +4561,7 @@
       "has_fixed_qty": true,
       "total_items": 87,
       "total_pieces": 473,
-      "preview_image": "/kit-covers/AlphaC.png?v=1794380767",
+      "preview_image": "/static/kit_images/image179.png",
       "sections": [],
       "items": [
         {
@@ -6773,7 +6773,7 @@
       "has_fixed_qty": true,
       "total_items": 41,
       "total_pieces": 131,
-      "preview_image": "/kit-covers/Beta.png?v=1794380812",
+      "preview_image": "/static/kit_images/image217.jpeg",
       "sections": [],
       "items": [
         {
@@ -7836,7 +7836,7 @@
       "has_fixed_qty": true,
       "total_items": 99,
       "total_pieces": 611,
-      "preview_image": "/kit-covers/Intell.png?v=1794380714",
+      "preview_image": "/static/kit_images/image312.png",
       "sections": [],
       "items": [
         {
@@ -8110,7 +8110,9 @@
           "pair_members": [],
           "pair_member_ids": [],
           "pair_label": "",
-          "images": []
+          "images": [
+            "/static/kit_images/image311.png"
+          ]
         },
         {
           "id": "intell_e6__r13",
@@ -8134,7 +8136,6 @@
           "pair_member_ids": [],
           "pair_label": "",
           "images": [
-            "/static/kit_images/image311.png",
             "/static/kit_images/image264.png"
           ]
         },
@@ -9520,7 +9521,9 @@
           "pair_members": [],
           "pair_member_ids": [],
           "pair_label": "",
-          "images": []
+          "images": [
+            "/static/kit_images/image267.png"
+          ]
         },
         {
           "id": "intell_e6__r68",
@@ -9544,7 +9547,6 @@
           "pair_member_ids": [],
           "pair_label": "",
           "images": [
-            "/static/kit_images/image267.png",
             "/static/kit_images/image266.png"
           ]
         },
@@ -10383,7 +10385,7 @@
       "has_fixed_qty": true,
       "total_items": 91,
       "total_pieces": 449,
-      "preview_image": "/kit-covers/Inno.png?v=1794380734",
+      "preview_image": "/static/kit_images/image219.png",
       "sections": [
         {
           "id": "inno_e7_sec_1",
@@ -12719,7 +12721,7 @@
       "has_fixed_qty": true,
       "total_items": 50,
       "total_pieces": 270,
-      "preview_image": "/kit-covers/MoRong.png?v=1794380661",
+      "preview_image": "/static/kit_images/image407.jpeg",
       "sections": [],
       "items": [
         {
