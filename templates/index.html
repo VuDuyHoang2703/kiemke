@@ -5,7 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Hệ Thống Kiểm Kê Linh Kiện Robot Cho Thuê</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=32" />
+  <link rel="stylesheet" href="/static/css/style.css?v=33" />
 </head>
 
 <body>
@@ -165,25 +165,35 @@
       </div>
 
       <div class="kpi-strip" id="teams-kpi-strip">
-        <div class="kpi-card">
+        <div class="kpi-card kpi-clickable" id="kpi-card-total" data-filter="all" title="Bấm để xem tất cả các đội">
           <span class="kpi-label">Tổng số đội</span>
           <strong class="kpi-val" id="kpi-total-teams">0</strong>
+          <span class="kpi-sub" id="kpi-sub-total">Tất cả các đội</span>
         </div>
-        <div class="kpi-card kpi-overdue">
-          <span class="kpi-label">Quá hạn chưa trả</span>
+        <div class="kpi-card kpi-clickable" id="kpi-card-returned" data-filter="returned" title="Bấm để lọc các đơn đã trả thiết bị về kho">
+          <span class="kpi-label">Đã trả thiết bị</span>
+          <strong class="kpi-val text-blue" id="kpi-returned-teams">0</strong>
+          <span class="kpi-sub" id="kpi-sub-returned">Thiết bị về kho</span>
+        </div>
+        <div class="kpi-card kpi-clickable kpi-highlight-amber" id="kpi-card-uninspected" data-filter="returned_uninspected" title="Bấm để lọc các đơn đã trả hàng nhưng chưa kiểm kê">
+          <span class="kpi-label">Đã trả chưa kiểm</span>
+          <strong class="kpi-val text-amber" id="kpi-uninspected-teams">0</strong>
+          <span class="kpi-sub" id="kpi-sub-uninspected">Cần kiểm ngay</span>
+        </div>
+        <div class="kpi-card kpi-clickable kpi-overdue" id="kpi-card-overdue" data-filter="overdue" title="Bấm để lọc các đơn chưa trả hàng đã hết hạn">
+          <span class="kpi-label">Chưa trả (Quá hạn)</span>
           <strong class="kpi-val text-red" id="kpi-overdue-teams">0</strong>
+          <span class="kpi-sub" id="kpi-sub-overdue">Hết hạn trả đồ</span>
         </div>
-        <div class="kpi-card">
-          <span class="kpi-label">Chờ / Đang kiểm kê</span>
-          <strong class="kpi-val text-amber" id="kpi-active-teams">0</strong>
-        </div>
-        <div class="kpi-card">
-          <span class="kpi-label">Đã hoàn tất</span>
+        <div class="kpi-card kpi-clickable" id="kpi-card-completed" data-filter="completed" title="Bấm để lọc các đơn đã kiểm kê hoàn tất">
+          <span class="kpi-label">Đã kiểm hoàn tất</span>
           <strong class="kpi-val text-green" id="kpi-done-teams">0</strong>
+          <span class="kpi-sub" id="kpi-sub-done">Đã chốt kết quả</span>
         </div>
-        <div class="kpi-card">
+        <div class="kpi-card kpi-clickable" id="kpi-card-comp" data-filter="has_shortage" title="Bấm để lọc các đơn phát hiện thiếu linh kiện">
           <span class="kpi-label">Tổng tiền bù ghi nhận</span>
           <strong class="kpi-val text-red" id="kpi-all-comp">0 ₫</strong>
+          <span class="kpi-sub" id="kpi-sub-comp">Tiền bù thiếu</span>
         </div>
       </div>
 
@@ -203,6 +213,7 @@
                 id="kpi-filter-returned-uninspected">0</span>)</button>
             <button class="pill-btn" data-filter="pending">Chưa kiểm</button>
             <button class="pill-btn" data-filter="inspecting">Đang kiểm</button>
+            <button class="pill-btn" data-filter="completed">Đã kiểm</button>
             <button class="pill-btn" data-filter="sufficient">Đủ</button>
             <button class="pill-btn" data-filter="has_shortage">Thiếu</button>
           </div>
@@ -1273,7 +1284,7 @@
   <!-- TOAST -->
   <div class="toast-container" id="toast-container"></div>
 
-  <script src="/static/js/app.js?v=32"></script>
+  <script src="/static/js/app.js?v=33"></script>
 </body>
 
 </html>

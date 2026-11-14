@@ -653,6 +653,39 @@ input[type="number"] {
   font-variant-numeric: tabular-nums;
 }
 
+.kpi-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-top: 1px;
+}
+
+.kpi-card.kpi-clickable {
+  cursor: pointer;
+  transition: all 0.16s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.kpi-card.kpi-clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  border-color: #94a3b8;
+}
+
+.kpi-card.kpi-active-filter {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.18) !important;
+  background: #f8faff !important;
+}
+
+.kpi-card.kpi-highlight-amber {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.text-blue {
+  color: #2563eb;
+}
+
 /* TOOLBAR & SEARCH */
 .toolbar {
   padding: 12px 16px;

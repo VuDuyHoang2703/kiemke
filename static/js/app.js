@@ -1562,42 +1562,44 @@
 
   function renderTeamsList() {
     const q = normalizeText(state.teamSearch.trim());
-    const f = state.teamFilter;
+    const f = state.teamFilter || "all";
 
-    // Update KPIs from all rentals
-    let activeCount = 0;
-    let doneCount = 0;
-    let overdueCount = 0;
+    // 1. Calculate global stats from all rentals
+    const totalAll = state.rentals.length;
+    let returnedAll = 0;
+    let uninspectedAll = 0;
+    let overdueAll = 0;
+    let doneAll = 0;
     let totalCompAll = 0;
-    let uninspectedReturnedCount = 0;
-    for (const r of state.rentals) {
-      if (r.status === "completed") doneCount++;
-      else activeCount++;
-      totalCompAll += Number(r.summary?.total_compensation || 0);
-      const retInfo = getReturnStatusInfo(r);
-      if (retInfo.isOverdue) overdueCount++;
-      if (retInfo.isReturned && r.status === "pending") uninspectedReturnedCount++;
-    }
-    $("kpi-total-teams").textContent = String(state.rentals.length);
-    $("kpi-active-teams").textContent = String(activeCount);
-    $("kpi-done-teams").textContent = String(doneCount);
-    $("kpi-all-comp").textContent = formatMoney(totalCompAll);
-    const kpiOverdueEl = $("kpi-overdue-teams");
-    if (kpiOverdueEl) kpiOverdueEl.textContent = String(overdueCount);
-    const filterOverdueSpan = $("kpi-filter-overdue");
-    if (filterOverdueSpan) filterOverdueSpan.textContent = String(overdueCount);
-    const filterUninspectedSpan = $("kpi-filter-returned-uninspected");
-    if (filterUninspectedSpan) filterUninspectedSpan.textContent = String(uninspectedReturnedCount);
 
+    for (const r of state.rentals) {
+      const retInfo = getReturnStatusInfo(r);
+      const isRet = Boolean(retInfo.isReturned);
+      const isDone = r.status === "completed";
+
+      if (isRet) returnedAll++;
+      if (isRet && r.status === "pending") uninspectedAll++;
+      if (retInfo.isOverdue) overdueAll++;
+      if (isDone) doneAll++;
+      totalCompAll += Number(r.summary?.total_compensation || 0);
+    }
+
+    const filterOverdueSpan = $("kpi-filter-overdue");
+    if (filterOverdueSpan) filterOverdueSpan.textContent = String(overdueAll);
+    const filterUninspectedSpan = $("kpi-filter-returned-uninspected");
+    if (filterUninspectedSpan) filterUninspectedSpan.textContent = String(uninspectedAll);
+
+    // 2. Filter rentals based on filter and search keyword
     const filtered = state.rentals.filter((r) => {
       const retInfo = getReturnStatusInfo(r);
       if (f === "overdue" && !retInfo.isOverdue) return false;
       if (f === "unreturned_overdue" && retInfo.key !== "unreturned_overdue") return false;
       if (f === "unreturned_ontime" && retInfo.key !== "unreturned_ontime") return false;
-      if (f === "returned" && retInfo.key !== "returned") return false;
+      if (f === "returned" && !retInfo.isReturned) return false;
       if (f === "returned_uninspected" && (!retInfo.isReturned || r.status !== "pending")) return false;
       if (f === "pending" && r.status !== "pending") return false;
       if (f === "inspecting" && r.status !== "inspecting") return false;
+      if (f === "completed" && r.status !== "completed") return false;
       if (f === "sufficient" && (r.status !== "completed" || (r.summary?.shortage_items_count || 0) > 0)) return false;
       if (f === "has_shortage" && (r.status !== "completed" || (r.summary?.shortage_items_count || 0) === 0)) return false;
       if (q) {
@@ -1608,6 +1610,81 @@
         if (!hay.includes(q)) return false;
       }
       return true;
+    });
+
+    // 3. Calculate filtered slice metrics
+    const isFiltered = (f !== "all") || (q.length > 0);
+    let filteredReturned = 0;
+    let filteredUninspected = 0;
+    let filteredOverdue = 0;
+    let filteredDone = 0;
+    let filteredComp = 0;
+
+    for (const r of filtered) {
+      const retInfo = getReturnStatusInfo(r);
+      const isRet = Boolean(retInfo.isReturned);
+      const isDone = r.status === "completed";
+
+      if (isRet) filteredReturned++;
+      if (isRet && r.status === "pending") filteredUninspected++;
+      if (retInfo.isOverdue) filteredOverdue++;
+      if (isDone) filteredDone++;
+      filteredComp += Number(r.summary?.total_compensation || 0);
+    }
+
+    // 4. Update KPI strip live numbers and descriptive subtitles
+    const setEl = (id, val) => {
+      const el = $(id);
+      if (el) el.textContent = val;
+    };
+
+    if (!isFiltered) {
+      setEl("kpi-total-teams", String(totalAll));
+      setEl("kpi-sub-total", "Tất cả các đội");
+
+      setEl("kpi-returned-teams", String(returnedAll));
+      setEl("kpi-sub-returned", "Thiết bị về kho");
+
+      setEl("kpi-uninspected-teams", String(uninspectedAll));
+      setEl("kpi-sub-uninspected", "Cần kiểm ngay");
+
+      setEl("kpi-overdue-teams", String(overdueAll));
+      setEl("kpi-sub-overdue", "Hết hạn trả đồ");
+
+      setEl("kpi-done-teams", String(doneAll));
+      setEl("kpi-sub-done", "Đã chốt kết quả");
+
+      setEl("kpi-all-comp", formatMoney(totalCompAll));
+      setEl("kpi-sub-comp", "Toàn hệ thống");
+    } else {
+      setEl("kpi-total-teams", String(filtered.length));
+      setEl("kpi-sub-total", `Hiển thị / ${totalAll} tổng`);
+
+      setEl("kpi-returned-teams", String(filteredReturned));
+      setEl("kpi-sub-returned", `${filteredReturned} / ${returnedAll} đã trả`);
+
+      setEl("kpi-uninspected-teams", String(filteredUninspected));
+      setEl("kpi-sub-uninspected", `${filteredUninspected} / ${uninspectedAll} chưa kiểm`);
+
+      setEl("kpi-overdue-teams", String(filteredOverdue));
+      setEl("kpi-sub-overdue", `${filteredOverdue} / ${overdueAll} quá hạn`);
+
+      setEl("kpi-done-teams", String(filteredDone));
+      setEl("kpi-sub-done", `${filteredDone} / ${doneAll} đã xong`);
+
+      setEl("kpi-all-comp", formatMoney(filteredComp));
+      setEl("kpi-sub-comp", "Trong danh sách lọc");
+    }
+    setEl("kpi-active-teams", String(totalAll - doneAll));
+
+    // 5. Highlight active KPI card and filter pill
+    document.querySelectorAll("#teams-kpi-strip .kpi-card").forEach((card) => {
+      const cardFilter = card.dataset.filter;
+      card.classList.toggle("kpi-active-filter", cardFilter === f);
+    });
+
+    document.querySelectorAll("#team-filter-pills .pill-btn").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.filter === f);
     });
 
     const tbody = $("teams-tbody");
@@ -3804,10 +3881,19 @@
 
     document.querySelectorAll("#team-filter-pills .pill-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
-        state.teamFilter = btn.dataset.filter;
-        document.querySelectorAll("#team-filter-pills .pill-btn").forEach((b) => {
-          b.classList.toggle("active", b === btn);
-        });
+        state.teamFilter = btn.dataset.filter || "all";
+        renderTeamsList();
+      });
+    });
+
+    document.querySelectorAll("#teams-kpi-strip .kpi-card").forEach((card) => {
+      card.addEventListener("click", () => {
+        const targetFilter = card.dataset.filter || "all";
+        if (state.teamFilter === targetFilter && targetFilter !== "all") {
+          state.teamFilter = "all";
+        } else {
+          state.teamFilter = targetFilter;
+        }
         renderTeamsList();
       });
     });
