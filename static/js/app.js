@@ -306,12 +306,20 @@
   }
 
   function getCurrentStaffName() {
-    return localStorage.getItem("inventory_staff_name") || "Người kiểm kê";
+    return (
+      (window.CURRENT_USER && (window.CURRENT_USER.username || window.CURRENT_USER.name || window.CURRENT_USER.email)) ||
+      localStorage.getItem("username") ||
+      localStorage.getItem("current_user") ||
+      localStorage.getItem("auth_username") ||
+      localStorage.getItem("inventory_staff_name") ||
+      "Tài khoản người dùng"
+    );
   }
 
   function setCurrentStaffName(name) {
-    const clean = (name || "").trim() || "Người kiểm kê";
+    const clean = (name || "").trim() || "Tài khoản người dùng";
     localStorage.setItem("inventory_staff_name", clean);
+    localStorage.setItem("username", clean);
     const el = $("log-current-staff-display");
     if (el) el.textContent = clean;
     return clean;
@@ -1527,25 +1535,16 @@
         ? `<button class="btn btn-warning btn-sm act-supplementary" title="Khách mang trả thêm linh kiện bị thiếu">+ Trả bổ sung</button>`
         : "";
 
-      const editBtnHtml = `<button class="btn btn-outline btn-sm act-edit-info" title="Sửa thông tin đơn thuê">✏️ Sửa</button>`;
-      const addItemsBtnHtml = `<button class="btn btn-outline btn-sm act-add-items" title="Thêm bộ hoặc linh kiện lẻ">+ Thêm đồ</button>`;
-
       const actionsHtml = isCompleted
         ? `
-          ${editBtnHtml}
-          ${addItemsBtnHtml}
           ${suppBtnHtml}
           <button class="btn btn-primary btn-sm act-report">Xem báo cáo</button>
         `
         : isPending
         ? `
-          ${editBtnHtml}
-          ${addItemsBtnHtml}
           <button class="btn btn-primary btn-sm act-inspect">Kiểm kê</button>
         `
         : `
-          ${editBtnHtml}
-          ${addItemsBtnHtml}
           <button class="btn btn-primary btn-sm act-inspect">Kiểm kê</button>
           <button class="btn btn-outline btn-sm act-report">Thống kê</button>
         `;
@@ -4049,7 +4048,7 @@
       $("edit-info-return-status").value = r.return_status || "Đã trả";
       $("edit-info-address").value = r.delivery_address || "";
       $("edit-info-note").value = r.note || "";
-      $("edit-info-actor").value = "Quản trị viên";
+      $("edit-info-actor").value = getCurrentStaffName();
 
       const btnViewOrig = $("btn-edit-info-view-orig");
       if (btnViewOrig) {
@@ -4079,7 +4078,7 @@
       return_status: $("edit-info-return-status").value,
       delivery_address: $("edit-info-address").value.trim(),
       note: $("edit-info-note").value.trim(),
-      actor: $("edit-info-actor").value.trim() || "Quản trị viên",
+      actor: $("edit-info-actor").value.trim() || getCurrentStaffName(),
     };
 
     if (!payload.team_name || !payload.returner_name || !payload.phone) {
@@ -4246,6 +4245,10 @@
       $("tab-add-cat-item").hidden = true;
       $("tab-add-custom").hidden = true;
 
+      if ($("add-item-actor")) {
+        $("add-item-actor").value = getCurrentStaffName();
+      }
+
       $("modal-add-rental-items").hidden = false;
     } catch (err) {
       showToast(err.message, "error");
@@ -4255,7 +4258,7 @@
   async function submitAddRentalItems() {
     if (!addItemsCurrentRentalId) return;
     const activeTab = document.querySelector(".tab-add-type.active")?.dataset.tab;
-    const actor = $("add-item-actor").value.trim() || "Quản trị viên";
+    const actor = $("add-item-actor").value.trim() || getCurrentStaffName();
 
     let payload = { actor };
     if (activeTab === "tab-add-kit") {

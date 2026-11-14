@@ -335,25 +335,29 @@
                 <span id="insp-email-wrap" hidden> · Gmail: <strong id="insp-email"></strong></span>
                 <span id="insp-note-wrap" hidden> · Ghi chú: <em id="insp-note"></em></span>
               </p>
-              <div id="insp-badges-bar" style="margin-top: 6px; display:flex; gap: 8px; align-items:center; flex-wrap:wrap;">
+              <div id="insp-badges-bar"
+                style="margin-top: 6px; display:flex; gap: 8px; align-items:center; flex-wrap:wrap;">
                 <span class="badge-return" id="insp-badge-return">Đã trả</span>
-                <button type="button" class="btn-xs-pill btn-orig-info" id="insp-btn-view-orig" hidden title="Xem thông tin gốc trước khi sửa">🕒 Đã sửa (Xem thông tin gốc)</button>
-                <button type="button" class="btn-xs-pill btn-added-items" id="insp-btn-view-added" hidden title="Xem các bộ / linh kiện được thêm so với ban đầu">🧩 +Đã thêm đồ (So sánh với bộ gốc)</button>
+                <button type="button" class="btn-xs-pill btn-orig-info" id="insp-btn-view-orig" hidden
+                  title="Xem thông tin gốc trước khi sửa">🕒 Đã sửa (Xem thông tin gốc)</button>
+                <button type="button" class="btn-xs-pill btn-added-items" id="insp-btn-view-added" hidden
+                  title="Xem các bộ / linh kiện được thêm so với ban đầu">🧩 +Đã thêm đồ (So sánh với bộ gốc)</button>
               </div>
             </div>
             <div class="btn-row">
               <button class="btn btn-secondary" id="btn-back-teams">← Danh sách đội</button>
               <button class="btn btn-outline" id="btn-inspect-edit-info" title="Chỉnh sửa thông tin đơn thuê">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
+                  <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
                 </svg>
                 <span>Sửa thông tin</span>
               </button>
-              <button class="btn btn-success" id="btn-inspect-add-items" title="Admin/Người kiểm kê chủ động thêm bộ hoặc linh kiện lẻ">
+              <button class="btn btn-success" id="btn-inspect-add-items"
+                title="Admin/Người kiểm kê chủ động thêm bộ hoặc linh kiện lẻ">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                   <path d="M12 5v14m-7-7h14" />
                 </svg>
-                <span>+ Thêm đồ</span>
+                <span>Thêm đồ</span>
               </button>
               <button class="btn btn-outline" id="btn-inspect-view-logs"
                 title="Xem lịch sử ghi nhận thay đổi của phiếu">
@@ -1081,71 +1085,105 @@
 
   <!-- MODAL: Chỉnh sửa thông tin đơn thuê -->
   <div class="modal-backdrop" id="modal-edit-rental-info" hidden>
-    <div class="modal-card" style="max-width: 620px; width: 95%;">
-      <div class="modal-head">
-        <div>
-          <span class="code-pill" id="edit-info-ticket-code">PKK-...</span>
-          <h3 style="margin:4px 0 0">Chỉnh sửa thông tin đơn thuê</h3>
+    <div class="modal-card modal-edit-rental-card">
+      <div class="modal-head modal-edit-rental-head">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div class="modal-head-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+            </svg>
+          </div>
+          <div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <h3 style="margin:0; font-size:16px; font-weight:700; color:var(--text);">Chỉnh sửa thông tin đơn thuê</h3>
+              <span class="code-pill" id="edit-info-ticket-code">PKK-...</span>
+            </div>
+            <p style="margin:2px 0 0; font-size:12px; color:var(--muted);">Cập nhật thông tin khách hàng, số điện thoại, hạn trả hoặc tình trạng trả thiết bị</p>
+          </div>
         </div>
         <button class="btn-icon" id="btn-close-edit-info" aria-label="Đóng">&times;</button>
       </div>
-      <div class="modal-body" style="padding: 16px 20px;">
-        <form id="form-edit-rental-info" style="display:flex; flex-direction:column; gap:12px;">
+      <div class="modal-body modal-edit-rental-body">
+        <form id="form-edit-rental-info" class="edit-rental-form">
           <input type="hidden" id="edit-info-rental-id" />
-          <div class="form-row" style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+          
+          <div class="edit-form-grid-2">
             <div class="form-group">
-              <label for="edit-info-team"><strong>Khách hàng / Đội thuê *</strong></label>
-              <input type="text" id="edit-info-team" class="text-input" required />
+              <label for="edit-info-team">Khách hàng / Đội thuê <span class="req-star">*</span></label>
+              <input type="text" id="edit-info-team" class="text-input" placeholder="Tên khách hàng hoặc tên đội..." required />
             </div>
             <div class="form-group">
-              <label for="edit-info-returner"><strong>Người nhận / Người trả *</strong></label>
-              <input type="text" id="edit-info-returner" class="text-input" required />
-            </div>
-          </div>
-          <div class="form-row" style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
-            <div class="form-group">
-              <label for="edit-info-phone"><strong>Số điện thoại *</strong></label>
-              <input type="text" id="edit-info-phone" class="text-input" required />
-            </div>
-            <div class="form-group">
-              <label for="edit-info-email">Email</label>
-              <input type="email" id="edit-info-email" class="text-input" />
+              <label for="edit-info-returner">Người nhận / Người trả <span class="req-star">*</span></label>
+              <input type="text" id="edit-info-returner" class="text-input" placeholder="Họ và tên người đại diện..." required />
             </div>
           </div>
-          <div class="form-row" style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+
+          <div class="edit-form-grid-2">
+            <div class="form-group">
+              <label for="edit-info-phone">Số điện thoại <span class="req-star">*</span></label>
+              <input type="tel" id="edit-info-phone" class="text-input" placeholder="Số điện thoại liên hệ..." required />
+            </div>
+            <div class="form-group">
+              <label for="edit-info-email">Email liên hệ</label>
+              <input type="email" id="edit-info-email" class="text-input" placeholder="email@example.com..." />
+            </div>
+          </div>
+
+          <div class="edit-form-grid-2">
             <div class="form-group">
               <label for="edit-info-due-date">Hạn trả hàng</label>
               <input type="date" id="edit-info-due-date" class="text-input" />
             </div>
             <div class="form-group">
-              <label for="edit-info-return-status"><strong>Tình trạng trả thiết bị</strong></label>
-              <select id="edit-info-return-status" class="select-input" style="width:100%;">
+              <label for="edit-info-return-status">Tình trạng trả thiết bị</label>
+              <select id="edit-info-return-status" class="select-input">
                 <option value="Đã trả">Đã trả (Đã nhận thiết bị về kho)</option>
                 <option value="Chưa trả">Chưa trả (Đang thuê / Mượn)</option>
               </select>
             </div>
           </div>
+
           <div class="form-group">
             <label for="edit-info-address">Địa chỉ giao hàng</label>
-            <input type="text" id="edit-info-address" class="text-input" />
+            <input type="text" id="edit-info-address" class="text-input" placeholder="Địa chỉ giao/nhận thiết bị..." />
           </div>
-          <div class="form-group">
-            <label for="edit-info-note">Ghi chú</label>
-            <textarea id="edit-info-note" class="text-input" rows="2"></textarea>
+
+          <!-- Ô ghi chú: Dài bằng chiều ngang modal, tối thiểu 3 dòng, cho phép kéo dài -->
+          <div class="form-group form-group-full">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:2px;">
+              <label for="edit-info-note" style="margin-bottom:0;">Ghi chú đơn hàng</label>
+              <span style="font-size:11.5px; color:var(--muted); font-style:italic;">(Kéo góc dưới để mở rộng)</span>
+            </div>
+            <textarea id="edit-info-note" class="text-input edit-note-textarea" rows="3" placeholder="Nhập ghi chú chi tiết cho đơn hàng này (nếu có)..."></textarea>
           </div>
-          <div class="form-group">
-            <label for="edit-info-actor">Người thực hiện chỉnh sửa</label>
-            <input type="text" id="edit-info-actor" class="text-input" value="Quản trị viên" />
+
+          <!-- Người thực hiện chỉnh sửa: Tự động theo tên tài khoản -->
+          <div class="form-group form-group-full actor-group">
+            <label for="edit-info-actor">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:text-bottom; margin-right:4px;">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+              </svg>
+              Tài khoản thực hiện chỉnh sửa
+            </label>
+            <input type="text" id="edit-info-actor" class="text-input actor-input" placeholder="Tên tài khoản người dùng..." />
+            <div class="actor-hint">Tự động nhận diện theo tài khoản đăng nhập của hệ thống.</div>
           </div>
         </form>
       </div>
-      <div class="modal-foot" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+      <div class="modal-foot modal-edit-rental-foot">
         <button type="button" class="btn btn-outline btn-sm" id="btn-edit-info-view-orig" hidden>
           🕒 Xem so sánh với thông tin gốc
         </button>
-        <div class="btn-row" style="margin-left:auto;">
+        <div class="btn-row" style="margin-left:auto; display:flex; gap:10px;">
           <button type="button" class="btn btn-secondary" id="btn-cancel-edit-info">Hủy</button>
-          <button type="button" class="btn btn-primary" id="btn-submit-edit-info">✓ Lưu thông tin</button>
+          <button type="button" class="btn btn-primary" id="btn-submit-edit-info">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:text-bottom; margin-right:4px;">
+              <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+            Lưu thông tin
+          </button>
         </div>
       </div>
     </div>
@@ -1182,7 +1220,8 @@
         </div>
         <div style="margin-top:20px;">
           <h4 style="margin:0 0 8px; font-size:14px;">Lịch sử các lần chỉnh sửa thông tin</h4>
-          <div id="orig-info-logs" style="max-height:180px; overflow-y:auto; border:1px solid var(--border); border-radius:6px; padding:8px 12px; background:var(--surface-alt); font-size:12.5px;">
+          <div id="orig-info-logs"
+            style="max-height:180px; overflow-y:auto; border:1px solid var(--border); border-radius:6px; padding:8px 12px; background:var(--surface-alt); font-size:12.5px;">
             <!-- Logs rendered via JS -->
           </div>
         </div>
@@ -1204,15 +1243,20 @@
         <button class="btn-icon" id="btn-close-add-items" aria-label="Đóng">&times;</button>
       </div>
       <div class="modal-body" style="padding: 16px 20px;">
-        <div class="tab-row" style="display:flex; gap:8px; border-bottom:1px solid var(--border); padding-bottom:8px; margin-bottom:16px; flex-wrap:wrap;">
-          <button type="button" class="pill-btn active tab-add-type" data-tab="tab-add-kit">1. Thêm bộ từ Catalog</button>
-          <button type="button" class="pill-btn tab-add-type" data-tab="tab-add-cat-item">2. Thêm linh kiện lẻ từ Catalog</button>
-          <button type="button" class="pill-btn tab-add-type" data-tab="tab-add-custom">3. Thêm linh kiện / sản phẩm tùy chỉnh</button>
+        <div class="tab-row"
+          style="display:flex; gap:8px; border-bottom:1px solid var(--border); padding-bottom:8px; margin-bottom:16px; flex-wrap:wrap;">
+          <button type="button" class="pill-btn active tab-add-type" data-tab="tab-add-kit">1. Thêm bộ từ
+            Catalog</button>
+          <button type="button" class="pill-btn tab-add-type" data-tab="tab-add-cat-item">2. Thêm linh kiện lẻ từ
+            Catalog</button>
+          <button type="button" class="pill-btn tab-add-type" data-tab="tab-add-custom">3. Thêm linh kiện / sản phẩm tùy
+            chỉnh</button>
         </div>
 
         <!-- TAB 1: THÊM BỘ TỪ CATALOG -->
         <div id="tab-add-kit" class="tab-add-pane">
-          <p class="muted text-sm" style="margin-bottom:12px;">Thêm 1 bộ thiết bị hoàn chỉnh (ví dụ ALPHA B, INTELL E6,...) vào đơn thuê này.</p>
+          <p class="muted text-sm" style="margin-bottom:12px;">Thêm 1 bộ thiết bị hoàn chỉnh (ví dụ ALPHA B, INTELL
+            E6,...) vào đơn thuê này.</p>
           <div class="form-group" style="margin-bottom:12px;">
             <label for="add-kit-select"><strong>Chọn bộ thiết bị *</strong></label>
             <select id="add-kit-select" class="select-input" style="width:100%;"></select>
@@ -1225,7 +1269,8 @@
 
         <!-- TAB 2: THÊM LINH KIỆN LẺ TỪ CATALOG -->
         <div id="tab-add-cat-item" class="tab-add-pane" hidden>
-          <p class="muted text-sm" style="margin-bottom:12px;">Chọn bộ thiết bị nguồn rồi tìm kiếm linh kiện lẻ theo tên/mã từ bảng giá chuẩn.</p>
+          <p class="muted text-sm" style="margin-bottom:12px;">Chọn bộ thiết bị nguồn rồi tìm kiếm linh kiện lẻ theo
+            tên/mã từ bảng giá chuẩn.</p>
           <div class="form-row" style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px;">
             <div class="form-group">
               <label for="add-cat-source-kit"><strong>Chọn bộ nguồn *</strong></label>
@@ -1240,18 +1285,21 @@
             <label for="add-cat-item-select"><strong>Chọn linh kiện lẻ *</strong></label>
             <select id="add-cat-item-select" class="select-input" style="width:100%;"></select>
           </div>
-          <div id="add-cat-item-preview" style="background:var(--surface-alt); border:1px solid var(--border); border-radius:6px; padding:10px 14px; font-size:13px; display:none;">
+          <div id="add-cat-item-preview"
+            style="background:var(--surface-alt); border:1px solid var(--border); border-radius:6px; padding:10px 14px; font-size:13px; display:none;">
             <!-- Live preview: Đơn giá, mã, ảnh -->
           </div>
         </div>
 
         <!-- TAB 3: THÊM SẢN PHẨM TÙY CHỈNH -->
         <div id="tab-add-custom" class="tab-add-pane" hidden>
-          <p class="muted text-sm" style="margin-bottom:12px;">Thêm sản phẩm, linh kiện hoặc phụ kiện ngoài danh mục chuẩn.</p>
+          <p class="muted text-sm" style="margin-bottom:12px;">Thêm sản phẩm, linh kiện hoặc phụ kiện ngoài danh mục
+            chuẩn.</p>
           <div class="form-row" style="display:grid; grid-template-columns: 2fr 1fr; gap:12px; margin-bottom:12px;">
             <div class="form-group">
               <label for="add-custom-name"><strong>Tên sản phẩm / Linh kiện *</strong></label>
-              <input type="text" id="add-custom-name" class="text-input" placeholder="Ví dụ: Cáp nối đặc biệt, Pin dự phòng..." />
+              <input type="text" id="add-custom-name" class="text-input"
+                placeholder="Ví dụ: Cáp nối đặc biệt, Pin dự phòng..." />
             </div>
             <div class="form-group">
               <label for="add-custom-unit">Đơn vị tính</label>
@@ -1274,9 +1322,16 @@
           </div>
         </div>
 
-        <div class="form-group" style="margin-top:14px; padding-top:12px; border-top:1px dashed var(--border);">
-          <label for="add-item-actor">Người thực hiện</label>
-          <input type="text" id="add-item-actor" class="text-input" value="Quản trị viên" />
+        <div class="form-group actor-group" style="margin-top:14px;">
+          <label for="add-item-actor">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:text-bottom; margin-right:4px;">
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+              <circle cx="12" cy="7" r="4"></circle>
+            </svg>
+            <strong>Tài khoản thực hiện</strong>
+          </label>
+          <input type="text" id="add-item-actor" class="text-input actor-input" placeholder="Tên tài khoản người dùng..." />
+          <div class="actor-hint">Tự động nhận diện theo tài khoản đăng nhập của hệ thống.</div>
         </div>
       </div>
       <div class="modal-foot" style="display:flex; justify-content:flex-end; gap:8px;">
@@ -1300,10 +1355,12 @@
         <!-- Phần 1: Bộ gốc -->
         <div style="margin-bottom:18px;">
           <h4 style="margin:0 0 8px; color:var(--text); font-size:14px; display:flex; align-items:center; gap:6px;">
-            <span style="display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--blue);"></span>
+            <span
+              style="display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--blue);"></span>
             1. Danh sách bộ &amp; thiết bị gốc ban đầu
           </h4>
-          <div id="compare-orig-kits-list" style="border:1px solid var(--border); border-radius:6px; padding:10px 14px; background:var(--surface-alt);">
+          <div id="compare-orig-kits-list"
+            style="border:1px solid var(--border); border-radius:6px; padding:10px 14px; background:var(--surface-alt);">
             <!-- Rendered via JS -->
           </div>
         </div>
@@ -1311,16 +1368,19 @@
         <!-- Phần 2: Đồ thêm bổ sung -->
         <div>
           <h4 style="margin:0 0 8px; color:var(--green); font-size:14px; display:flex; align-items:center; gap:6px;">
-            <span style="display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--green);"></span>
+            <span
+              style="display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--green);"></span>
             2. Các bộ &amp; linh kiện được thêm bổ sung
           </h4>
-          <div id="compare-added-kits-list" style="border:1px solid var(--border); border-radius:6px; padding:10px 14px; background:var(--surface-alt);">
+          <div id="compare-added-kits-list"
+            style="border:1px solid var(--border); border-radius:6px; padding:10px 14px; background:var(--surface-alt);">
             <!-- Rendered via JS -->
           </div>
         </div>
       </div>
       <div class="modal-foot" style="display:flex; justify-content:space-between; align-items:center;">
-        <button type="button" class="btn btn-outline btn-sm" id="btn-compare-open-add-modal">+ Thêm tiếp linh kiện</button>
+        <button type="button" class="btn btn-outline btn-sm" id="btn-compare-open-add-modal">+ Thêm tiếp linh
+          kiện</button>
         <button type="button" class="btn btn-secondary" id="btn-close-compare-kits-foot">Đóng</button>
       </div>
     </div>
