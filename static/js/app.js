@@ -1153,11 +1153,9 @@
   // --- CRM Import Functions ---
   async function loadCrmPreview(file = null, useSample = false) {
     const btnBrowse = $("btn-browse-crm-file");
-    const btnSample = $("btn-use-sample-crm");
     const dropZone = $("crm-drop-zone");
 
     if (btnBrowse) btnBrowse.disabled = true;
-    if (btnSample) btnSample.disabled = true;
     showToast("Đang đọc và phân tích dữ liệu đơn hàng CRM...", "info");
 
     try {
@@ -1226,7 +1224,6 @@
       showToast(err.message || "Lỗi đọc file CRM", "error");
     } finally {
       if (btnBrowse) btnBrowse.disabled = false;
-      if (btnSample) btnSample.disabled = false;
     }
   }
 
@@ -3581,10 +3578,6 @@
       if (file) loadCrmPreview(file, false);
     });
 
-    $("btn-use-sample-crm")?.addEventListener("click", () => {
-      loadCrmPreview(null, true);
-    });
-
     const dropZone = $("crm-drop-zone");
     if (dropZone) {
       dropZone.addEventListener("dragover", (e) => {
@@ -3920,22 +3913,6 @@
         showToast("Đã đồng bộ dữ liệu mới nhất từ KIEM KE HANG THUE.xlsx!", "success");
       } catch (err) {
         showToast("Lỗi đồng bộ Excel: " + err.message, "error");
-      } finally {
-        btn.disabled = false;
-      }
-    });
-
-    $("btn-reset-sample-data")?.addEventListener("click", async () => {
-      if (!confirm("Khôi phục lại toàn bộ dữ liệu mẫu 100 đơn ban đầu?")) return;
-      const btn = $("btn-reset-sample-data");
-      btn.disabled = true;
-      try {
-        const res = await api("/api/admin/reset-sample", { method: "POST" });
-        showToast(res.message || "Đã khôi phục thành công 100 đơn hàng!", "success");
-        await loadRentals();
-        await switchView("teams");
-      } catch (err) {
-        showToast(err.message || "Lỗi khôi phục dữ liệu", "error");
       } finally {
         btn.disabled = false;
       }
