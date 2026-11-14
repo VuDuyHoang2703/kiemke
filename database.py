@@ -738,8 +738,8 @@ def build_rental_detail(conn, rental_row, catalog_by_id):
                 }]
             }
 
-        # Friendly display label for this individual kit instance
-        inst_suffix = f" (Bộ {instance_index}/{same_type_total})" if same_type_total > 1 else ""
+        # Friendly display label for this individual kit instance: kit name + kit order
+        inst_suffix = f" (Bộ {instance_index})" if same_type_total > 1 else ""
         if kit_id in ("phu_kien_le", "phu_kien_di_kem"):
             display_label = cat_kit["name"]
         elif kit_code:
@@ -956,44 +956,99 @@ def build_rental_detail(conn, rental_row, catalog_by_id):
     rental["original_info"] = orig_info
     rental["return_status"] = rental.get("return_status") or "Đã trả"
 
-    # 2. Compute original kits vs added kits/items
-    added_kits_summary = []
-    original_kits_summary = []
-    for kd in kit_details:
-        rk_raw = next((r for r in kits_selected if r["id"] == kd["rental_kit_id"]), {})
-        is_added_kit = bool(rk_raw.get("is_added_after"))
-        
-        # Check custom items inside this kit (loose items)
-        added_items = [it for it in kd["items"] if it.get("is_added_after")]
-        orig_items = [it for it in kd["items"] if not it.get("is_added_after")]
-        
-        if is_added_kit:
-            added_kits_summary.append({
-                "type": "kit",
-                "display_label": kd["display_label"],
-                "kit_name": kd["kit_name"],
-                "total_items": kd["total_items"],
-                "is_added_after": True,
-            })
+    # 2. Compute original kits vs added kits/items (grouped cleanly by name + total quantity)
+    orig_kit_counts = {}
+    orig_loose_items = {}
+    added_kit_counts = {}
+    added_loose_items = {}
+
+    for rk in kits_selected:
+        is_added_kit = bool(rk.get("is_added_after"))
+        k_id = rk["kit_id"]
+        k_name = rk["kit_name"]
+        is_loose_container = (
+            k_id in ("phu_kien_le", "phu_kien_di_kem")
+            or "phụ kiện" in k_name.lower()
+            or "linh kiện bổ sung" in k_name.lower()
+        )
+
+        c_json = rk.get("custom_items_json")
+        items = json.loads(c_json) if c_json else []
+
+        if is_loose_container:
+            if not items:
+                target_counts = added_kit_counts if is_added_kit else orig_kit_counts
+                target_counts[k_name] = target_counts.get(k_name, 0) + 1
+            else:
+                for it in items:
+                    is_ait = bool(it.get("is_added_after")) or is_added_kit
+                    td = added_loose_items if is_ait else orig_loose_items
+                    it_name = it.get("name") or "Linh kiện"
+                    it_unit = it.get("unit") or "cái"
+                    it_qty = float(it.get("expected_qty") or it.get("qty") or 1)
+                    it_price = float(it.get("unit_price") or 0)
+                    key = (it_name, it_unit)
+                    if key not in td:
+                        td[key] = {
+                            "name": it_name,
+                            "qty": 0,
+                            "unit": it_unit,
+                            "unit_price": it_price,
+                            "type": "item",
+                        }
+                    td[key]["qty"] += it_qty
         else:
-            if added_items:
-                for ait in added_items:
-                    added_kits_summary.append({
-                        "type": "item",
-                        "display_label": f"{ait['name']} ({kd['display_label']})",
-                        "item_name": ait["name"],
-                        "qty": ait.get("expected_qty") or 1,
-                        "unit": ait.get("unit") or "cái",
-                        "unit_price": ait.get("unit_price") or 0,
-                        "is_added_after": True,
-                    })
-            if orig_items or not added_items:
-                original_kits_summary.append({
-                    "type": "kit",
-                    "display_label": kd["display_label"],
-                    "kit_name": kd["kit_name"],
-                    "total_items": len(orig_items) if added_items else kd["total_items"],
-                })
+            target_counts = added_kit_counts if is_added_kit else orig_kit_counts
+            target_counts[k_name] = target_counts.get(k_name, 0) + 1
+
+            if items:
+                for it in items:
+                    if it.get("is_added_after") and not is_added_kit:
+                        it_name = it.get("name") or "Linh kiện"
+                        it_unit = it.get("unit") or "cái"
+                        it_qty = float(it.get("expected_qty") or it.get("qty") or 1)
+                        it_price = float(it.get("unit_price") or 0)
+                        key = (it_name, it_unit)
+                        if key not in added_loose_items:
+                            added_loose_items[key] = {
+                                "name": it_name,
+                                "qty": 0,
+                                "unit": it_unit,
+                                "unit_price": it_price,
+                                "type": "item",
+                            }
+                        added_loose_items[key]["qty"] += it_qty
+
+    def _fmt_qty(q):
+        return int(q) if q == int(q) else q
+
+    original_kits_summary = [
+        {"name": name, "qty": count, "unit": "bộ", "type": "kit"}
+        for name, count in orig_kit_counts.items()
+    ] + [
+        {
+            "name": v["name"],
+            "qty": _fmt_qty(v["qty"]),
+            "unit": v["unit"],
+            "type": "item",
+            "unit_price": v["unit_price"],
+        }
+        for v in orig_loose_items.values()
+    ]
+
+    added_kits_summary = [
+        {"name": name, "qty": count, "unit": "bộ", "type": "kit"}
+        for name, count in added_kit_counts.items()
+    ] + [
+        {
+            "name": v["name"],
+            "qty": _fmt_qty(v["qty"]),
+            "unit": v["unit"],
+            "type": "item",
+            "unit_price": v["unit_price"],
+        }
+        for v in added_loose_items.values()
+    ]
 
     rental["has_added_items"] = len(added_kits_summary) > 0
     rental["added_kits_summary"] = added_kits_summary

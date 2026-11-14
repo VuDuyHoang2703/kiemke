@@ -16,6 +16,23 @@ def get_existing_crm_order_nos(conn):
     return {r["crm_order_no"].strip().upper() for r in rows if r["crm_order_no"]}
 
 
+def get_existing_crm_orders_dict(conn):
+    """Return a map of existing orders with their id, return_status and inspection status."""
+    rows = conn.execute(
+        "SELECT id, crm_order_no, code, return_status, status FROM rentals WHERE deleted_at IS NULL"
+    ).fetchall()
+    res = {}
+    for r in rows:
+        cno = (r["crm_order_no"] or "").strip().upper()
+        code = (r["code"] or "").strip().upper()
+        entry = {"id": r["id"], "return_status": r["return_status"] or "Chưa trả", "status": r["status"]}
+        if cno:
+            res[cno] = entry
+        if code:
+            res[code] = entry
+    return res
+
+
 def classify_crm_line_item(code: str, desc: str, kits_by_id: dict):
     """
     Phân tích chi tiết hàng thuê từ Diễn giải và Mã hàng hóa CRM.
@@ -141,15 +158,21 @@ def find_catalog_match(code: str, desc: str, all_catalog_items: list):
     return None
 
 
-def parse_crm_file(file_source, catalog: dict, existing_crm_order_nos: set = None):
+def parse_crm_file(file_source, catalog: dict, existing_crm_order_nos=None, existing_crm_orders: dict = None):
     """
     Parse CRM Saleorder Excel file.
     file_source: Path, string path, or file-like / bytes object.
     catalog: catalog dict containing 'kits'.
+    existing_crm_orders: dict mapping crm_order_no to {id, return_status, status}.
     existing_crm_order_nos: set of CRM order codes already in DB for deduplication.
     """
-    if existing_crm_order_nos is None:
-        existing_crm_order_nos = set()
+    existing_dict = {}
+    if isinstance(existing_crm_orders, dict):
+        existing_dict = existing_crm_orders
+    elif isinstance(existing_crm_order_nos, dict):
+        existing_dict = existing_crm_order_nos
+    elif isinstance(existing_crm_order_nos, (set, list)):
+        existing_dict = {str(k).strip().upper(): {"id": None, "return_status": "Chưa trả"} for k in existing_crm_order_nos if k}
 
     kits_by_id = {k["id"]: k for k in catalog.get("kits", [])}
     all_catalog_items = _build_catalog_item_index(catalog)
@@ -534,15 +557,22 @@ def parse_crm_file(file_source, catalog: dict, existing_crm_order_nos: set = Non
         team_name = customer or recipient or f"Đơn hàng {order_key}"
         returner = recipient or customer or "Chưa rõ"
 
-        # Determine import status (new, duplicate, or no_kits)
-        is_dup = order_key.upper() in existing_crm_order_nos
+        # Determine import status (new, duplicate, update_return, or no_kits)
+        existing_entry = existing_dict.get(order_key.upper())
+        is_dup = existing_entry is not None
         has_kits = len(kits) > 0
         is_loose = any(k.get("kit_id") == "phu_kien_le" for k in kits)
-        is_already_returned = ("đã trả toàn bộ" in return_status.lower() or "đã trả hết" in return_status.lower())
+        ret_lower = return_status.lower()
+        is_already_returned = any(w in ret_lower for w in ["đã trả toàn bộ", "đã trả hết", "đã trả đúng hạn", "đã trả"])
 
         if is_dup:
-            status = "duplicate"
-            status_label = "Đã tồn tại trong hệ thống (sẽ bỏ qua)"
+            curr_ret = str(existing_entry.get("return_status") or "Chưa trả").strip()
+            if is_already_returned and curr_ret != "Đã trả":
+                status = "update_return"
+                status_label = "Cập nhật: Đã trả hàng (Khách vừa trả đồ theo CRM mới)"
+            else:
+                status = "duplicate"
+                status_label = "Đã tồn tại trong hệ thống (sẽ bỏ qua)"
         elif not has_kits:
             status = "no_kits"
             status_label = "Đơn rỗng (không có linh kiện)"
@@ -554,7 +584,7 @@ def parse_crm_file(file_source, catalog: dict, existing_crm_order_nos: set = Non
             status_label = "Mới (Thuê phụ kiện lẻ)"
         else:
             status = "new"
-            status_label = "Mới - Sẵn sàng nạp"
+            status_label = "Mới (Chưa trả thiết bị)"
 
         orders.append({
             "order_no": order_key,
@@ -567,7 +597,8 @@ def parse_crm_file(file_source, catalog: dict, existing_crm_order_nos: set = Non
             "address": address,
             "due_date": due_date_str,
             "book_date": book_date_str,
-            "return_status": return_status,
+            "return_status": "Đã trả" if is_already_returned else "Chưa trả",
+            "raw_return_status": return_status,
             "is_already_returned": is_already_returned,
             "note": note,
             "kits": kits,
@@ -576,11 +607,12 @@ def parse_crm_file(file_source, catalog: dict, existing_crm_order_nos: set = Non
             "is_loose": is_loose,
             "status": status,
             "status_label": status_label,
-            "can_import": (status == "new"),
+            "can_import": (status in ("new", "update_return")),
         })
 
     total_orders = len(orders)
     new_count = sum(1 for o in orders if o["status"] == "new")
+    update_return_count = sum(1 for o in orders if o["status"] == "update_return")
     duplicate_count = sum(1 for o in orders if o["status"] == "duplicate")
     loose_count = sum(1 for o in orders if o.get("is_loose"))
     no_kits_count = sum(1 for o in orders if o["status"] == "no_kits")
@@ -588,6 +620,7 @@ def parse_crm_file(file_source, catalog: dict, existing_crm_order_nos: set = Non
     return {
         "total_orders": total_orders,
         "new_count": new_count,
+        "update_return_count": update_return_count,
         "duplicate_count": duplicate_count,
         "loose_count": loose_count,
         "no_kits_count": no_kits_count,
@@ -598,10 +631,11 @@ def parse_crm_file(file_source, catalog: dict, existing_crm_order_nos: set = Non
 def import_crm_orders(conn, catalog: dict, orders_data: list, actor: str = "Người kiểm kê"):
     """
     Import parsed orders into rentals and rental_kits.
-    Strictly skips duplicates already in the database.
+    Strictly skips duplicates already in the database, but updates return_status if CRM has changed to 'Đã trả'.
     """
-    current_existing = get_existing_crm_order_nos(conn)
+    existing_dict = get_existing_crm_orders_dict(conn)
     imported_tickets = []
+    updated_tickets = []
     duplicate_skipped = 0
     no_kits_skipped = 0
 
@@ -609,8 +643,43 @@ def import_crm_orders(conn, catalog: dict, orders_data: list, actor: str = "Ngư
 
     for order in orders_data:
         order_key = order["order_no"].strip().upper()
-        if order_key in current_existing:
-            duplicate_skipped += 1
+        existing_entry = existing_dict.get(order_key)
+
+        ret_str = str(order.get("raw_return_status") or order.get("return_status") or "").lower()
+        is_already_returned = order.get("is_already_returned") or any(w in ret_str for w in ["đã trả toàn bộ", "đã trả hết", "đã trả đúng hạn", "đã trả"])
+        return_status = "Đã trả" if is_already_returned else "Chưa trả"
+
+        if existing_entry:
+            curr_ret = str(existing_entry.get("return_status") or "Chưa trả").strip()
+            # If CRM now indicates the goods are returned, but database still recorded as not returned:
+            if return_status == "Đã trả" and curr_ret != "Đã trả":
+                conn.execute(
+                    "UPDATE rentals SET return_status = 'Đã trả', updated_at = ? WHERE id = ?",
+                    (now, existing_entry["id"])
+                )
+                conn.execute(
+                    """
+                    INSERT INTO rental_change_logs (
+                        rental_id, action, actor, actor_role, summary, details, created_at
+                    ) VALUES (?, 'UPDATE_RETURN_STATUS_CRM', ?, 'staff', ?, ?, ?)
+                    """,
+                    (
+                        existing_entry["id"],
+                        actor or "CRM Sync",
+                        "Cập nhật trạng thái: Đã trả hàng (đồng bộ lại từ file CRM mới)",
+                        json.dumps({"old_return_status": curr_ret, "new_return_status": "Đã trả"}, ensure_ascii=False),
+                        now
+                    )
+                )
+                updated_tickets.append({
+                    "ticket_code": order["order_no"],
+                    "crm_order_no": order["order_no"],
+                    "team_name": order["team_name"],
+                    "action": "updated_return_status",
+                })
+                existing_entry["return_status"] = "Đã trả"
+            else:
+                duplicate_skipped += 1
             continue
 
         kits = order.get("kits", [])
@@ -620,11 +689,6 @@ def import_crm_orders(conn, catalog: dict, orders_data: list, actor: str = "Ngư
 
         # Use exact CRM order number as ticket code so staff can search and reference directly!
         ticket_code = order["order_no"]
-
-        is_already_returned = order.get("is_already_returned") or ("đã trả toàn bộ" in str(order.get("return_status") or "").lower())
-        return_status = "Đã trả" if is_already_returned else "Chưa trả"
-        # "Đã trả toàn bộ" = đã trả thiết bị về kho, không đồng nghĩa là đã kiểm kê
-        # Trạng thái kiểm kê luôn bắt đầu bằng 'pending' để nhân viên kiểm tra đủ/thiếu
         order_status = "pending"
         completed_at = None
         init_snapshot_json = None
@@ -710,7 +774,7 @@ def import_crm_orders(conn, catalog: dict, orders_data: list, actor: str = "Ngư
             ),
         )
 
-        current_existing.add(order_key)
+        existing_dict[order_key] = {"id": rental_id, "return_status": return_status, "status": order_status}
         imported_tickets.append({
             "ticket_code": ticket_code,
             "crm_order_no": order["order_no"],
@@ -720,7 +784,9 @@ def import_crm_orders(conn, catalog: dict, orders_data: list, actor: str = "Ngư
 
     return {
         "imported_count": len(imported_tickets),
+        "updated_count": len(updated_tickets),
         "duplicate_skipped_count": duplicate_skipped,
         "no_kits_skipped_count": no_kits_skipped,
         "imported_tickets": imported_tickets,
+        "updated_tickets": updated_tickets,
     }

@@ -36,7 +36,7 @@ from database import (
     record_change_log,
 )
 from excel_parser import parse_workbook, resolve_kit_cover_image
-from crm_parser import get_existing_crm_order_nos, import_crm_orders, parse_crm_file
+from crm_parser import get_existing_crm_order_nos, get_existing_crm_orders_dict, import_crm_orders, parse_crm_file
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
@@ -583,6 +583,46 @@ def api_update_rental(rental_id):
     return jsonify({"ok": True, "rental": detail})
 
 
+@app.route("/api/rentals/<int:rental_id>/receive-return", methods=["POST"])
+def api_receive_return(rental_id):
+    """
+    Xác nhận khách đã bàn giao thiết bị về kho:
+    - Chuyển return_status thành 'Đã trả'
+    - Ghi nhận nhật ký change_logs
+    - Cho phép tiến hành kiểm kê
+    """
+    _, catalog_by_id = load_catalog()
+    data = request.get_json(silent=True) or {}
+    actor = (data.get("actor") or "Nhân viên kho").strip()
+    now = now_iso()
+
+    with get_conn(DB_PATH) as conn:
+        row = conn.execute(
+            "SELECT * FROM rentals WHERE id = ? AND deleted_at IS NULL", (rental_id,)
+        ).fetchone()
+        if not row:
+            return jsonify({"error": "Không tìm thấy phiếu kiểm kê"}), 404
+
+        old_status = row["return_status"] or "Chưa trả"
+        conn.execute(
+            "UPDATE rentals SET return_status = 'Đã trả', updated_at = ? WHERE id = ?",
+            (now, rental_id)
+        )
+        record_change_log(
+            conn,
+            rental_id=rental_id,
+            action="RECEIVE_RETURN",
+            actor=actor,
+            actor_role="staff",
+            summary="Xác nhận đã nhận bàn giao thiết bị về kho (Chuyển sang Đã trả)",
+            details=json.dumps({"old_return_status": old_status, "new_return_status": "Đã trả"}, ensure_ascii=False),
+        )
+        updated_row = conn.execute("SELECT * FROM rentals WHERE id = ?", (rental_id,)).fetchone()
+        detail = build_rental_detail(conn, updated_row, catalog_by_id)
+
+    return jsonify({"ok": True, "message": "Đã ghi nhận nhận hàng trả lại từ khách!", "rental": detail})
+
+
 @app.route("/api/rentals/<int:rental_id>/add-items", methods=["POST"])
 def api_add_rental_items(rental_id):
     _, catalog_by_id = load_catalog()
@@ -599,61 +639,105 @@ def api_add_rental_items(rental_id):
 
         now = now_iso()
 
-        if item_type == "kit":
-            kit_id = data.get("kit_id")
-            if not kit_id or kit_id not in catalog_by_id:
-                return jsonify({"error": "Không tìm thấy mã bộ trong catalog"}), 400
-            cat_kit = catalog_by_id[kit_id]
-            kit_code = (data.get("kit_code") or "").strip()
+        if item_type in ("batch_kits", "kit") or "kits" in data:
+            kits_to_add = data.get("kits")
+            if not kits_to_add:
+                kit_id = data.get("kit_id")
+                kit_code = (data.get("kit_code") or "").strip()
+                qty = int(data.get("qty", 1))
+                kits_to_add = [{"kit_id": kit_id, "kit_code": kit_code, "qty": qty}]
 
-            existing_count = conn.execute(
-                "SELECT COUNT(*) FROM rental_kits WHERE rental_id = ? AND kit_id = ?",
-                (rental_id, kit_id),
-            ).fetchone()[0]
-            instance_index = existing_count + 1
+            added_names = []
+            for kentry in kits_to_add:
+                kit_id = kentry.get("kit_id")
+                if not kit_id or kit_id not in catalog_by_id:
+                    continue
+                cat_kit = catalog_by_id[kit_id]
+                kit_code = (kentry.get("kit_code") or "").strip()
+                qty = max(1, int(kentry.get("qty", 1)))
 
-            conn.execute(
-                """
-                INSERT INTO rental_kits (
-                    rental_id, kit_id, kit_name, instance_index, kit_code, kit_count, is_added_after
-                ) VALUES (?, ?, ?, ?, ?, 1, 1)
-                """,
-                (rental_id, kit_id, cat_kit["name"], instance_index, kit_code),
-            )
+                for _ in range(qty):
+                    existing_count = conn.execute(
+                        "SELECT COUNT(*) FROM rental_kits WHERE rental_id = ? AND kit_id = ?",
+                        (rental_id, kit_id),
+                    ).fetchone()[0]
+                    instance_index = existing_count + 1
+
+                    conn.execute(
+                        """
+                        INSERT INTO rental_kits (
+                            rental_id, kit_id, kit_name, instance_index, kit_code, kit_count, is_added_after
+                        ) VALUES (?, ?, ?, ?, ?, 1, 1)
+                        """,
+                        (rental_id, kit_id, cat_kit["name"], instance_index, kit_code),
+                    )
+                added_names.append(f"{qty}x {cat_kit['name']}" + (f" [{kit_code}]" if kit_code else ""))
+
+            if not added_names:
+                return jsonify({"error": "Không tìm thấy bộ hợp lệ để thêm"}), 400
+
             record_change_log(
                 conn,
                 rental_id=rental_id,
                 action="ADD_KIT",
                 actor=actor,
                 actor_role="admin",
-                summary=f"Thêm bộ bổ sung: {cat_kit['name']}" + (f" [{kit_code}]" if kit_code else ""),
-                details=json.dumps({"kit_id": kit_id, "kit_name": cat_kit["name"], "kit_code": kit_code, "instance_index": instance_index}, ensure_ascii=False),
+                summary=f"Thêm bộ trả bổ sung: {', '.join(added_names)}",
+                details=json.dumps({"kits": kits_to_add}, ensure_ascii=False),
             )
 
-        elif item_type == "catalog_item":
-            source_kit_id = data.get("source_kit_id")
-            item_id = data.get("item_id")
-            qty = max(1.0, float(data.get("qty", 1)))
-            cat_kit = catalog_by_id.get(source_kit_id)
-            if not cat_kit:
-                return jsonify({"error": "Không tìm thấy bộ nguồn"}), 400
-            matched_item = next((it for it in cat_kit["items"] if str(it["id"]) == str(item_id)), None)
-            if not matched_item:
-                return jsonify({"error": "Không tìm thấy linh kiện trong bộ"}), 400
+        elif item_type in ("batch_catalog_items", "catalog_item") or "items" in data:
+            items_to_add = data.get("items")
+            if not items_to_add:
+                items_to_add = [{
+                    "source_kit_id": data.get("source_kit_id"),
+                    "item_id": data.get("item_id"),
+                    "qty": data.get("qty", 1),
+                }]
 
-            new_item_obj = {
-                "id": f"added_{item_id}_{int(datetime.now().timestamp()*1000)}",
-                "name": matched_item["name"],
-                "code": matched_item.get("code") or "",
-                "unit": matched_item.get("unit") or "cái",
-                "unit_price": matched_item.get("unit_price") or 0,
-                "qty": qty,
-                "expected_qty": qty,
-                "images": matched_item.get("images") or [],
-                "source_kit_name": cat_kit["name"],
-                "is_added_after": True,
-                "added_at": now,
-            }
+            new_item_objs = []
+            added_labels = []
+            ts = int(datetime.now().timestamp() * 1000)
+
+            for idx, it_entry in enumerate(items_to_add):
+                source_kit_id = it_entry.get("source_kit_id")
+                item_id = it_entry.get("item_id")
+                qty = max(1.0, float(it_entry.get("qty", 1)))
+
+                cat_kit = catalog_by_id.get(source_kit_id)
+                matched_item = None
+                if cat_kit:
+                    matched_item = next((it for it in cat_kit.get("items", []) if str(it["id"]) == str(item_id)), None)
+
+                if not matched_item:
+                    for k in catalog_by_id.values():
+                        found = next((it for it in k.get("items", []) if str(it["id"]) == str(item_id)), None)
+                        if found:
+                            cat_kit = k
+                            matched_item = found
+                            break
+
+                if not matched_item or not cat_kit:
+                    continue
+
+                new_item_obj = {
+                    "id": f"added_{item_id}_{ts}_{idx}",
+                    "name": matched_item["name"],
+                    "code": matched_item.get("code") or "",
+                    "unit": matched_item.get("unit") or "cái",
+                    "unit_price": matched_item.get("unit_price") or 0,
+                    "qty": qty,
+                    "expected_qty": qty,
+                    "images": matched_item.get("images") or [],
+                    "source_kit_name": cat_kit["name"],
+                    "is_added_after": True,
+                    "added_at": now,
+                }
+                new_item_objs.append(new_item_obj)
+                added_labels.append(f"{matched_item['name']} (SL: {qty:g} {matched_item.get('unit', 'cái')})")
+
+            if not new_item_objs:
+                return jsonify({"error": "Không tìm thấy linh kiện hợp lệ để thêm"}), 400
 
             loose_rk = conn.execute(
                 "SELECT * FROM rental_kits WHERE rental_id = ? AND kit_id = 'phu_kien_le' LIMIT 1",
@@ -665,7 +749,7 @@ def api_add_rental_items(rental_id):
                     existing_items = json.loads(loose_rk["custom_items_json"] or "[]")
                 except Exception:
                     existing_items = []
-                existing_items.append(new_item_obj)
+                existing_items.extend(new_item_objs)
                 conn.execute(
                     "UPDATE rental_kits SET custom_items_json = ? WHERE id = ?",
                     (json.dumps(existing_items, ensure_ascii=False), loose_rk["id"]),
@@ -677,17 +761,22 @@ def api_add_rental_items(rental_id):
                         rental_id, kit_id, kit_name, instance_index, kit_code, kit_count, is_added_after, custom_items_json
                     ) VALUES (?, 'phu_kien_le', 'Linh kiện bổ sung', 1, '', 1, 1, ?)
                     """,
-                    (rental_id, json.dumps([new_item_obj], ensure_ascii=False)),
+                    (rental_id, json.dumps(new_item_objs, ensure_ascii=False)),
                 )
 
+            summary_text = (
+                f"Thêm {len(new_item_objs)} linh kiện trả bổ sung: "
+                + ", ".join(added_labels[:3])
+                + (f" và {len(added_labels)-3} linh kiện khác" if len(added_labels) > 3 else "")
+            )
             record_change_log(
                 conn,
                 rental_id=rental_id,
                 action="ADD_COMPONENT",
                 actor=actor,
                 actor_role="admin",
-                summary=f"Thêm linh kiện bổ sung: {matched_item['name']} (SL: {qty:g} {matched_item.get('unit', 'cái')})",
-                details=json.dumps(new_item_obj, ensure_ascii=False),
+                summary=summary_text,
+                details=json.dumps({"items": new_item_objs}, ensure_ascii=False),
             )
 
         elif item_type == "custom_item":
@@ -1908,10 +1997,10 @@ def api_crm_preview():
 
     catalog, _ = load_catalog()
     with get_conn(DB_PATH) as conn:
-        existing_orders = get_existing_crm_order_nos(conn)
+        existing_orders = get_existing_crm_orders_dict(conn)
 
     try:
-        preview_data = parse_crm_file(file_bytes, catalog, existing_crm_order_nos=existing_orders)
+        preview_data = parse_crm_file(file_bytes, catalog, existing_crm_orders=existing_orders)
     except Exception as exc:
         return jsonify({"error": f"Lỗi đọc file Excel CRM: {str(exc)}"}), 400
 
@@ -1949,10 +2038,10 @@ def api_crm_import():
             return jsonify({"error": "Không có dữ liệu đơn hàng để nạp"}), 400
 
         with get_conn(DB_PATH) as conn:
-            existing_orders = get_existing_crm_order_nos(conn)
+            existing_orders = get_existing_crm_orders_dict(conn)
 
         try:
-            parsed = parse_crm_file(file_bytes, catalog, existing_crm_order_nos=existing_orders)
+            parsed = parse_crm_file(file_bytes, catalog, existing_crm_orders=existing_orders)
             orders_to_process = parsed["orders"]
         except Exception as exc:
             return jsonify({"error": f"Lỗi đọc file Excel CRM: {str(exc)}"}), 400
@@ -1961,20 +2050,26 @@ def api_crm_import():
         result = import_crm_orders(conn, catalog, orders_to_process, actor=actor)
 
         skip_parts = []
+        if result.get("updated_count", 0) > 0:
+            skip_parts.append(f"cập nhật trạng thái Đã trả cho {result['updated_count']} đơn")
         if result["duplicate_skipped_count"] > 0:
             skip_parts.append(f"bỏ qua {result['duplicate_skipped_count']} đơn đã tồn tại")
         if result["no_kits_skipped_count"] > 0:
             skip_parts.append(f"bỏ qua {result['no_kits_skipped_count']} đơn rỗng")
         skip_text = f" ({', '.join(skip_parts)})" if skip_parts else ""
 
+        upd_text = f" và cập nhật {result.get('updated_count', 0)} đơn sang Đã trả" if result.get("updated_count") else ""
+
     return jsonify(
         {
             "success": True,
             "imported_count": result["imported_count"],
+            "updated_count": result.get("updated_count", 0),
             "duplicate_skipped_count": result["duplicate_skipped_count"],
             "no_kits_skipped_count": result["no_kits_skipped_count"],
             "imported_tickets": result["imported_tickets"],
-            "message": f"Đã nạp thành công {result['imported_count']} đơn hàng mới vào danh sách kiểm kê!{skip_text}",
+            "updated_tickets": result.get("updated_tickets", []),
+            "message": f"Đã nạp thành công {result['imported_count']} đơn hàng mới{upd_text} vào hệ thống!{skip_text}",
         }
     )
 

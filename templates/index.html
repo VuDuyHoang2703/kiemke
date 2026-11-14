@@ -5,24 +5,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Hệ Thống Kiểm Kê Linh Kiện Robot Cho Thuê</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=27" />
+  <link rel="stylesheet" href="/static/css/style.css?v=32" />
 </head>
 
 <body>
   <header class="topbar no-print">
     <div class="topbar-inner">
       <div class="brand">
-        <div class="brand-icon" aria-hidden="true">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="8" width="18" height="12" rx="2" />
-            <path d="M12 8V4" />
-            <circle cx="12" cy="3" r="1" />
-            <circle cx="8.5" cy="14" r="1.5" />
-            <circle cx="15.5" cy="14" r="1.5" />
-            <path d="M9 17.5h6" />
-          </svg>
-        </div>
         <div>
           <h1 class="brand-title">Kiểm Kê Hàng Thuê Robot</h1>
           <p class="brand-sub">Tiếp nhận trả hàng · Đếm linh kiện · Thống kê tiền bù</p>
@@ -31,38 +20,27 @@
 
       <nav class="nav-steps" aria-label="Menu điều hướng">
         <button class="nav-btn active" data-view="checkin" id="nav-checkin">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="7 10 12 15 17 10" />
-            <line x1="12" y1="15" x2="12" y2="3" />
-          </svg>
           <span>Tiếp nhận trả hàng</span>
         </button>
         <button class="nav-btn" data-view="teams" id="nav-teams">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-            <circle cx="9" cy="7" r="4" />
-            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-          </svg>
           <span>Danh sách đội thuê</span>
           <span class="nav-badge" id="teams-count-badge">0</span>
         </button>
       </nav>
 
       <div class="topbar-actions">
-        <button type="button" class="active-ticket-pill" id="active-ticket-pill" hidden
-          title="Nhấn để chuyển nhanh tới phiếu đang mở"></button>
+        <button type="button" class="nav-uninspected-pill" id="nav-uninspected-pill"
+          title="Nhấn để xem danh sách các đơn đã trả hàng nhưng chưa kiểm kê">
+          <span id="nav-uninspected-text">0 đơn đã trả chưa kiểm</span>
+        </button>
         <span class="save-pill" id="save-indicator" hidden>Đã lưu</span>
         <button class="btn btn-ghost btn-sm" id="btn-reload-excel"
           title="Đọc lại dữ liệu từ file KIEM KE HANG THUE.xlsx">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-            <path d="M3 3v5h5" />
-            <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
-            <path d="M16 16h5v5" />
-          </svg>
           <span>Đồng bộ Excel</span>
+        </button>
+      </div>
+    </div>
+  </header>
         </button>
       </div>
     </div>
@@ -83,25 +61,12 @@
 
       <div class="card crm-upload-card">
         <div class="crm-upload-area" id="crm-drop-zone">
-          <div class="crm-upload-icon">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-              <polyline points="14 2 14 8 20 8" />
-              <line x1="12" y1="18" x2="12" y2="12" />
-              <line x1="9" y1="15" x2="15" y2="15" />
-            </svg>
-          </div>
           <h3>Kéo thả file Excel CRM vào đây hoặc chọn file từ máy</h3>
           <p class="muted">Hỗ trợ file xuất danh sách đơn hàng CRM (ví dụ: <code>CRM_Saleorder_...xlsx</code>). Hệ thống
             tự phân tích bộ linh kiện và <strong>chỉ nạp đơn mới, tự động bỏ qua toàn bộ đơn trùng lặp</strong>.</p>
           <div class="crm-upload-actions">
             <input type="file" id="crm-file-input" accept=".xlsx,.xls" hidden />
             <button type="button" class="btn btn-primary" id="btn-browse-crm-file">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="17 8 12 3 7 8" />
-                <line x1="12" y1="3" x2="12" y2="15" />
-              </svg>
               <span>Chọn file Excel CRM</span>
             </button>
           </div>
@@ -120,10 +85,6 @@
           <div class="btn-row">
             <button type="button" class="btn btn-secondary btn-sm" id="btn-crm-cancel">Hủy bỏ</button>
             <button type="button" class="btn btn-primary btn-lg" id="btn-crm-confirm-import">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M5 12h14" />
-                <path d="m12 5 7 7-7 7" />
-              </svg>
               <span id="crm-confirm-import-text">Tiến hành nạp vào danh sách kiểm kê</span>
             </button>
           </div>
@@ -146,6 +107,10 @@
             <span class="kpi-label">Đơn thuê phụ kiện lẻ</span>
             <strong class="kpi-val text-amber" id="crm-kpi-nokits">0</strong>
           </div>
+          <div class="kpi-card" id="crm-kpi-card-update" hidden>
+            <span class="kpi-label">Cập nhật Đã trả</span>
+            <strong class="kpi-val text-green" id="crm-kpi-update">0</strong>
+          </div>
         </div>
 
         <div class="toolbar" style="padding: 0.5rem 1rem;">
@@ -156,6 +121,7 @@
           <div class="filter-pills" id="crm-preview-filters">
             <button class="pill-btn active" data-filter="all">Tất cả</button>
             <button class="pill-btn" data-filter="new">Chỉ đơn mới</button>
+            <button class="pill-btn" data-filter="update_return" id="crm-filter-update" hidden>Cập nhật Đã trả</button>
             <button class="pill-btn" data-filter="duplicate">Đã tồn tại</button>
             <button class="pill-btn" data-filter="loose">Phụ kiện lẻ</button>
           </div>
@@ -193,11 +159,6 @@
         </div>
         <div class="btn-row wrap">
           <button class="btn btn-primary" id="btn-new-team">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
             <span>Nạp đơn hàng từ CRM</span>
           </button>
         </div>
@@ -229,21 +190,21 @@
       <div class="card">
         <div class="toolbar">
           <div class="search-wrap">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="11" cy="11" r="8" />
-              <path d="m21 21-4.3-4.3" />
-            </svg>
             <input type="search" id="team-search"
               placeholder="Tìm theo tên đội, người trả, SĐT, Gmail, mã phiếu, mã bộ..." />
           </div>
           <div class="filter-pills" id="team-filter-pills">
             <button class="pill-btn active" data-filter="all">Tất cả</button>
-            <button class="pill-btn pill-btn-overdue" data-filter="overdue">⚠️ Quá hạn (<span
+            <button class="pill-btn pill-btn-overdue" data-filter="overdue">Chưa trả (Hết hạn) (<span
                 id="kpi-filter-overdue">0</span>)</button>
-            <button class="pill-btn" data-filter="pending">Chưa kiểm kê</button>
-            <button class="pill-btn" data-filter="inspecting">Đang kiểm kê</button>
-            <button class="pill-btn" data-filter="sufficient">Kiểm đủ</button>
-            <button class="pill-btn" data-filter="has_shortage">Có thiếu đồ</button>
+            <button class="pill-btn" data-filter="unreturned_ontime">Chưa trả (Còn hạn)</button>
+            <button class="pill-btn" data-filter="returned">Đã trả</button>
+            <button class="pill-btn" data-filter="returned_uninspected" id="filter-btn-returned-uninspected">Đã trả chưa kiểm (<span
+                id="kpi-filter-returned-uninspected">0</span>)</button>
+            <button class="pill-btn" data-filter="pending">Chưa kiểm</button>
+            <button class="pill-btn" data-filter="inspecting">Đang kiểm</button>
+            <button class="pill-btn" data-filter="sufficient">Đủ</button>
+            <button class="pill-btn" data-filter="has_shortage">Thiếu</button>
           </div>
         </div>
 
@@ -290,20 +251,24 @@
           có thể xem Thống kê &amp; Báo cáo hoặc tiếp tục nhận trả bổ sung nếu khách mang hàng đến trả thêm.</p>
         <div class="btn-row">
           <button class="btn btn-primary" id="btn-locked-goto-report">Xem Thống kê &amp; Báo cáo</button>
-          <button class="btn btn-secondary" id="btn-locked-goto-teams">← Danh sách đội</button>
+          <button class="btn btn-secondary" id="btn-locked-goto-teams">Danh sách đội</button>
         </div>
       </div>
 
       <div id="inspect-workspace" hidden>
+        <div id="insp-unreturned-notice" class="unreturned-banner" hidden>
+          <div style="display:flex; align-items:center; justify-content:space-between; width:100%; flex-wrap:wrap; gap:10px;">
+            <div>
+              <strong>Thiết bị chưa được trả về kho:</strong> Đơn này hiện đang ở trạng thái <em>Chưa trả</em>. Hãy bấm nút bên cạnh khi khách hàng đã bàn giao thiết bị để bắt đầu kiểm kê.
+            </div>
+            <button type="button" class="btn btn-success btn-sm" id="btn-insp-receive-return">Xác nhận đã nhận hàng trả</button>
+          </div>
+        </div>
+
         <div id="insp-completed-notice" class="completed-edit-banner" hidden>
           <div
             style="display: flex; align-items: center; justify-content: space-between; width: 100%; flex-wrap: wrap; gap: 10px;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                style="flex-shrink:0">
-                <circle cx="12" cy="12" r="10" />
-                <path d="m9 12 2 2 4-4" />
-              </svg>
+            <div>
               <span id="insp-completed-notice-text"><strong>Phiếu đã hoàn tất kiểm kê</strong> — Đang mở ở chế độ
                 <strong>cho phép chỉnh sửa số lượng</strong>. Sau khi chỉnh xong, vui lòng bấm <strong>"Lưu chỉnh
                   sửa"</strong> hoặc <strong>"Thống kê &amp; Báo cáo"</strong> để ghi nhận nhật ký ngày giờ.</span>
@@ -312,11 +277,6 @@
               <button type="button" class="btn btn-secondary btn-sm" id="btn-inspect-cancel-completed-edit">Hủy
                 bỏ</button>
               <button type="button" class="btn btn-primary btn-sm" id="btn-inspect-save-completed-edit">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-                  <polyline points="17 21 17 13 7 13 7 21" />
-                  <polyline points="7 3 7 8 15 8" />
-                </svg>
                 <span>Lưu chỉnh sửa</span>
               </button>
             </div>
@@ -339,48 +299,29 @@
                 style="margin-top: 6px; display:flex; gap: 8px; align-items:center; flex-wrap:wrap;">
                 <span class="badge-return" id="insp-badge-return">Đã trả</span>
                 <button type="button" class="btn-xs-pill btn-orig-info" id="insp-btn-view-orig" hidden
-                  title="Xem thông tin gốc trước khi sửa">🕒 Đã sửa (Xem thông tin gốc)</button>
+                  title="Xem thông tin gốc trước khi sửa">Đã sửa (Xem thông tin gốc)</button>
                 <button type="button" class="btn-xs-pill btn-added-items" id="insp-btn-view-added" hidden
-                  title="Xem các bộ / linh kiện được thêm so với ban đầu">🧩 +Đã thêm đồ (So sánh với bộ gốc)</button>
+                  title="Xem các bộ / linh kiện được thêm so với ban đầu">Đã thêm đồ (So sánh với bộ gốc)</button>
               </div>
             </div>
             <div class="btn-row">
-              <button class="btn btn-secondary" id="btn-back-teams">← Danh sách đội</button>
+              <button class="btn btn-secondary" id="btn-back-teams">Danh sách đội</button>
               <button class="btn btn-outline" id="btn-inspect-edit-info" title="Chỉnh sửa thông tin đơn thuê">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
-                </svg>
                 <span>Sửa thông tin</span>
               </button>
               <button class="btn btn-success" id="btn-inspect-add-items"
-                title="Admin/Người kiểm kê chủ động thêm bộ hoặc linh kiện lẻ">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-                  <path d="M12 5v14m-7-7h14" />
-                </svg>
-                <span>Thêm đồ</span>
+                title="Thêm bộ kit hoặc linh kiện vào đơn thuê nếu danh sách trả bị thiếu">
+                <span>Thêm đồ trả</span>
               </button>
               <button class="btn btn-outline" id="btn-inspect-view-logs"
                 title="Xem lịch sử ghi nhận thay đổi của phiếu">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="10" />
-                  <polyline points="12 6 12 12 16 14" />
-                </svg>
                 <span>Lịch sử</span>
               </button>
               <button class="btn btn-warning" id="btn-inspect-supplementary" hidden
                 title="Khách mang trả thêm linh kiện bị thiếu">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-                  <path d="M12 5v14m-7-7h14" />
-                </svg>
                 <span>Trả bổ sung</span>
               </button>
               <button class="btn btn-primary" id="btn-goto-report">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M3 3v18h18" />
-                  <path d="M18 17V9" />
-                  <path d="M13 17V5" />
-                  <path d="M8 17v-3" />
-                </svg>
                 <span>Thống kê &amp; Báo cáo</span>
               </button>
             </div>
@@ -395,12 +336,9 @@
                 <input type="text" id="insp-kit-code-input" class="kit-code-input"
                   placeholder="Nhập mã bộ kiểm kê (vd: E6-01)..." autocomplete="off" />
                 <button type="button" class="btn btn-sm btn-primary" id="btn-save-kit-code">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
                   <span>Lưu mã bộ</span>
                 </button>
-                <span id="kit-code-save-status" class="kit-code-save-status" hidden>✓ Tự động lưu</span>
+                <span id="kit-code-save-status" class="kit-code-save-status" hidden>Tự động lưu</span>
               </div>
               <span class="muted text-sm" id="insp-kit-code-hint">Mỗi bộ bắt buộc phải có mã riêng · Tự động lưu khi
                 nhập</span>
@@ -409,10 +347,6 @@
 
           <div class="toolbar toolbar-compact">
             <div class="search-wrap">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="11" cy="11" r="8" />
-                <path d="m21 21-4.3-4.3" />
-              </svg>
               <input type="search" id="insp-search" placeholder="Tìm tên linh kiện hoặc mã linh kiện..." />
             </div>
 
@@ -479,7 +413,7 @@
             </div>
           </div>
           <div class="btn-row">
-            <button class="btn btn-secondary" id="btn-sticky-teams">← Danh sách đội</button>
+            <button class="btn btn-secondary" id="btn-sticky-teams">Danh sách đội</button>
             <button class="btn btn-primary" id="btn-sticky-report">
               <span>Thống kê &amp; Xuất báo cáo</span>
             </button>
@@ -500,68 +434,34 @@
       <div id="report-content" hidden>
         <div class="report-toolbar no-print">
           <div class="btn-row">
-            <button class="btn btn-secondary" id="btn-report-back-inspect">← Quay lại kiểm kê</button>
+            <button class="btn btn-secondary" id="btn-report-back-inspect">Quay lại kiểm kê</button>
             <button class="btn btn-ghost" id="btn-report-back-teams">Danh sách đội</button>
           </div>
           <div class="btn-row wrap">
             <button class="btn btn-gmail" id="btn-send-gmail">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="2" y="4" width="20" height="16" rx="2" />
-                <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
-              </svg>
               <span>Gửi báo cáo qua Gmail</span>
             </button>
             <button class="btn btn-outline" id="btn-copy-summary">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="9" y="9" width="13" height="13" rx="2" />
-                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-              </svg>
               <span>Copy tóm tắt gửi khách</span>
             </button>
             <button class="btn btn-outline" id="btn-export-excel-shortage">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-              </svg>
               <span>Xuất Excel (Hàng thiếu)</span>
             </button>
             <button class="btn btn-outline" id="btn-export-excel-full">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                <polyline points="14 2 14 8 20 8" />
-              </svg>
               <span>Xuất Excel (Đầy đủ)</span>
             </button>
             <button class="btn btn-secondary" id="btn-print-report">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="6 9 6 2 18 2 18 9" />
-                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-                <rect x="6" y="14" width="12" height="8" />
-              </svg>
               <span>In / Lưu PDF</span>
             </button>
             <button class="btn btn-outline" id="btn-view-change-logs"
               title="Xem lịch sử ghi nhận các lần thay đổi số liệu trong phiếu">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10" />
-                <polyline points="12 6 12 12 16 14" />
-              </svg>
               <span>Lịch sử thay đổi</span>
             </button>
             <button class="btn btn-primary" id="btn-toolbar-save-edit" hidden>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-                <polyline points="17 21 17 13 7 13 7 21" />
-                <polyline points="7 3 7 8 15 8" />
-              </svg>
               <span>Lưu chỉnh sửa</span>
             </button>
             <button class="btn btn-warning" id="btn-report-supplementary" hidden
               title="Khách mang trả thêm linh kiện bị thiếu">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-                <path d="M12 5v14m-7-7h14" />
-              </svg>
               <span>Trả hàng bổ sung</span>
             </button>
             <button class="btn btn-success" id="btn-toggle-complete">Hoàn tất kiểm kê &amp; Ghi nhận</button>
@@ -570,10 +470,6 @@
 
         <div class="pending-edit-banner no-print" id="rep-completed-edit-banner" hidden>
           <div class="pending-edit-info">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-              style="flex-shrink:0; color:#b45309">
-              <path d="M12 9v4m0 4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-            </svg>
             <div>
               <strong>Cảnh báo chỉnh sửa phiếu đã hoàn tất:</strong>
               <div class="pending-edit-desc">Bạn vừa sửa số lượng kiểm kê nhưng <strong>chưa lưu</strong>. Hãy đối soát
@@ -585,11 +481,6 @@
             <button type="button" class="btn btn-secondary btn-sm" id="btn-cancel-completed-edit">Hủy bỏ thay
               đổi</button>
             <button type="button" class="btn btn-primary btn-sm" id="btn-save-completed-edit">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-                <polyline points="17 21 17 13 7 13 7 21" />
-                <polyline points="7 3 7 8 15 8" />
-              </svg>
               <span>Lưu chỉnh sửa</span>
             </button>
           </div>
@@ -669,31 +560,18 @@
             hidden>
             <div
               style="font-size:13.5px; font-weight:700; color:var(--text); display:flex; align-items:center; gap:8px;">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10" />
-                <polyline points="12 6 12 12 16 14" />
-              </svg>
               <span>Tiến trình các lần trả hàng (<span id="rep-rounds-count-text">1 đợt</span>)</span>
             </div>
             <div class="btn-row wrap">
               <button type="button" class="btn btn-outline btn-sm" id="btn-copy-history-audit"
                 title="Sao chép toàn bộ tiến trình trả hàng theo từng đợt để gửi cho khách đối soát">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="9" y="9" width="13" height="13" rx="2" />
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                </svg>
                 <span>Sao chép trích lục đối soát</span>
               </button>
-              <button type="button" class="btn btn-warning btn-sm" id="btn-supp-from-history" style="font-weight:600;">+
-                Trả bổ sung ngay</button>
+              <button type="button" class="btn btn-warning btn-sm" id="btn-supp-from-history" style="font-weight:600;">Trả bổ sung ngay</button>
             </div>
           </div>
 
           <div id="rep-full-ok-banner" class="full-ok-banner" hidden>
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-              <polyline points="22 4 12 14.01 9 11.01" />
-            </svg>
             <div>
               <strong>Khách hàng đã trả ĐỦ 100% linh kiện!</strong>
               <p>Không ghi nhận linh kiện thiếu hoặc phát sinh chi phí bồi thường.</p>
@@ -873,11 +751,6 @@
       </div>
 
       <div class="audit-integration-tip">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10" />
-          <line x1="12" y1="16" x2="12" y2="12" />
-          <line x1="12" y1="8" x2="12.01" y2="8" />
-        </svg>
         <div>
           <strong>Sẵn sàng tích hợp hệ thống:</strong> Luồng ghi log tự động lưu <strong>người thay đổi</strong>,
           <strong>ngày giờ chính xác</strong> và <strong>chi tiết số lượng</strong>. Sau này khi kết nối hệ thống phân
@@ -918,12 +791,7 @@
   <div class="modal-backdrop" id="modal-missing-kit-code" hidden>
     <div class="modal-card modal-sm">
       <div class="modal-head">
-        <div style="display:flex; align-items:center; gap:8px;">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#d97706" stroke-width="2">
-            <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-            <line x1="12" y1="9" x2="12" y2="13" />
-            <line x1="12" y1="17" x2="12.01" y2="17" />
-          </svg>
+        <div>
           <h3 style="color:#b45309; margin:0;">Chưa nhập mã cho các bộ robot</h3>
         </div>
         <button class="btn-icon" id="btn-close-missing-kit-code" aria-label="Đóng">&times;</button>
@@ -944,10 +812,6 @@
       <div class="btn-row" style="justify-content: flex-end; gap:10px">
         <button type="button" class="btn btn-primary" id="btn-goto-enter-kit-code">
           <span>Nhập mã cho bộ này ngay</span>
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M5 12h14" />
-            <path d="m12 5 7 7-7 7" />
-          </svg>
         </button>
       </div>
     </div>
@@ -957,12 +821,7 @@
   <div class="modal-backdrop" id="modal-unentered-kits" hidden>
     <div class="modal-card modal-sm">
       <div class="modal-head">
-        <div style="display:flex; align-items:center; gap:8px;">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="16" x2="12" y2="12" />
-            <line x1="12" y1="8" x2="12.01" y2="8" />
-          </svg>
+        <div>
           <h3 style="color:#1d4ed8; margin:0;">Xác nhận số lượng bộ linh kiện</h3>
         </div>
         <button class="btn-icon" id="btn-close-unentered-kits" aria-label="Đóng">&times;</button>
@@ -1073,10 +932,7 @@
         <div class="btn-row">
           <button type="button" class="btn btn-secondary" id="btn-cancel-supplementary">Hủy</button>
           <button type="button" class="btn btn-primary" id="btn-submit-supplementary">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-              <path d="M20 6 9 17l-5-5" />
-            </svg>
-            <span id="supp-submit-btn-text">✓ Lưu đợt trả bổ sung</span>
+            <span id="supp-submit-btn-text">Lưu đợt trả bổ sung</span>
           </button>
         </div>
       </div>
@@ -1087,42 +943,39 @@
   <div class="modal-backdrop" id="modal-edit-rental-info" hidden>
     <div class="modal-card modal-edit-rental-card">
       <div class="modal-head modal-edit-rental-head">
-        <div style="display:flex; align-items:center; gap:12px;">
-          <div class="modal-head-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-            </svg>
+        <div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <h3 style="margin:0; font-size:16px; font-weight:700; color:var(--text);">Chỉnh sửa thông tin đơn thuê
+            </h3>
+            <span class="code-pill" id="edit-info-ticket-code">PKK-...</span>
           </div>
-          <div>
-            <div style="display:flex; align-items:center; gap:8px;">
-              <h3 style="margin:0; font-size:16px; font-weight:700; color:var(--text);">Chỉnh sửa thông tin đơn thuê</h3>
-              <span class="code-pill" id="edit-info-ticket-code">PKK-...</span>
-            </div>
-            <p style="margin:2px 0 0; font-size:12px; color:var(--muted);">Cập nhật thông tin khách hàng, số điện thoại, hạn trả hoặc tình trạng trả thiết bị</p>
-          </div>
+          <p style="margin:2px 0 0; font-size:12px; color:var(--muted);">Cập nhật thông tin khách hàng, số điện thoại,
+            hạn trả hoặc tình trạng trả thiết bị</p>
         </div>
         <button class="btn-icon" id="btn-close-edit-info" aria-label="Đóng">&times;</button>
       </div>
       <div class="modal-body modal-edit-rental-body">
         <form id="form-edit-rental-info" class="edit-rental-form">
           <input type="hidden" id="edit-info-rental-id" />
-          
+
           <div class="edit-form-grid-2">
             <div class="form-group">
               <label for="edit-info-team">Khách hàng / Đội thuê <span class="req-star">*</span></label>
-              <input type="text" id="edit-info-team" class="text-input" placeholder="Tên khách hàng hoặc tên đội..." required />
+              <input type="text" id="edit-info-team" class="text-input" placeholder="Tên khách hàng hoặc tên đội..."
+                required />
             </div>
             <div class="form-group">
               <label for="edit-info-returner">Người nhận / Người trả <span class="req-star">*</span></label>
-              <input type="text" id="edit-info-returner" class="text-input" placeholder="Họ và tên người đại diện..." required />
+              <input type="text" id="edit-info-returner" class="text-input" placeholder="Họ và tên người đại diện..."
+                required />
             </div>
           </div>
 
           <div class="edit-form-grid-2">
             <div class="form-group">
               <label for="edit-info-phone">Số điện thoại <span class="req-star">*</span></label>
-              <input type="tel" id="edit-info-phone" class="text-input" placeholder="Số điện thoại liên hệ..." required />
+              <input type="tel" id="edit-info-phone" class="text-input" placeholder="Số điện thoại liên hệ..."
+                required />
             </div>
             <div class="form-group">
               <label for="edit-info-email">Email liên hệ</label>
@@ -1155,35 +1008,28 @@
               <label for="edit-info-note" style="margin-bottom:0;">Ghi chú đơn hàng</label>
               <span style="font-size:11.5px; color:var(--muted); font-style:italic;">(Kéo góc dưới để mở rộng)</span>
             </div>
-            <textarea id="edit-info-note" class="text-input edit-note-textarea" rows="3" placeholder="Nhập ghi chú chi tiết cho đơn hàng này (nếu có)..."></textarea>
+            <textarea id="edit-info-note" class="text-input edit-note-textarea" rows="3"
+              placeholder="Nhập ghi chú chi tiết cho đơn hàng này (nếu có)..."></textarea>
           </div>
 
           <!-- Người thực hiện chỉnh sửa: Tự động theo tên tài khoản -->
           <div class="form-group form-group-full actor-group">
             <label for="edit-info-actor">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:text-bottom; margin-right:4px;">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                <circle cx="12" cy="7" r="4"></circle>
-              </svg>
               Tài khoản thực hiện chỉnh sửa
             </label>
-            <input type="text" id="edit-info-actor" class="text-input actor-input" placeholder="Tên tài khoản người dùng..." />
+            <input type="text" id="edit-info-actor" class="text-input actor-input"
+              placeholder="Tên tài khoản người dùng..." />
             <div class="actor-hint">Tự động nhận diện theo tài khoản đăng nhập của hệ thống.</div>
           </div>
         </form>
       </div>
       <div class="modal-foot modal-edit-rental-foot">
         <button type="button" class="btn btn-outline btn-sm" id="btn-edit-info-view-orig" hidden>
-          🕒 Xem so sánh với thông tin gốc
+          Xem thông tin gốc
         </button>
         <div class="btn-row" style="margin-left:auto; display:flex; gap:10px;">
           <button type="button" class="btn btn-secondary" id="btn-cancel-edit-info">Hủy</button>
-          <button type="button" class="btn btn-primary" id="btn-submit-edit-info">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:text-bottom; margin-right:4px;">
-              <polyline points="20 6 9 17 4 12"></polyline>
-            </svg>
-            Lưu thông tin
-          </button>
+          <button type="button" class="btn btn-primary" id="btn-submit-edit-info">Lưu thông tin</button>
         </div>
       </div>
     </div>
@@ -1232,111 +1078,150 @@
     </div>
   </div>
 
-  <!-- MODAL: Thêm linh kiện / bộ vào đơn thuê (Admin tự chủ) -->
+  <!-- MODAL: Thêm đồ trả (Bộ kit & Linh kiện lẻ) -->
   <div class="modal-backdrop" id="modal-add-rental-items" hidden>
-    <div class="modal-card" style="max-width: 720px; width: 95%;">
-      <div class="modal-head">
+    <div class="modal-card modal-add-rental-card">
+      <div class="modal-head modal-add-rental-head">
         <div>
-          <span class="code-pill" id="add-item-ticket-code">PKK-...</span>
-          <h3 style="margin:4px 0 0">Thêm linh kiện / Bộ vào đơn thuê</h3>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <h3 style="margin:0; font-size:16px; font-weight:700; color:var(--text);">Thêm đồ trả</h3>
+            <span class="code-pill" id="add-item-ticket-code">PKK-...</span>
+          </div>
+          <p style="margin:3px 0 0; font-size:12.5px; color:var(--muted);">Thêm bộ kit hoặc linh kiện vào đơn thuê nếu danh sách trả bị thiếu</p>
         </div>
         <button class="btn-icon" id="btn-close-add-items" aria-label="Đóng">&times;</button>
       </div>
-      <div class="modal-body" style="padding: 16px 20px;">
-        <div class="tab-row"
-          style="display:flex; gap:8px; border-bottom:1px solid var(--border); padding-bottom:8px; margin-bottom:16px; flex-wrap:wrap;">
-          <button type="button" class="pill-btn active tab-add-type" data-tab="tab-add-kit">1. Thêm bộ từ
-            Catalog</button>
-          <button type="button" class="pill-btn tab-add-type" data-tab="tab-add-cat-item">2. Thêm linh kiện lẻ từ
-            Catalog</button>
-          <button type="button" class="pill-btn tab-add-type" data-tab="tab-add-custom">3. Thêm linh kiện / sản phẩm tùy
-            chỉnh</button>
+
+      <div class="modal-body modal-add-rental-body">
+        <div class="add-items-tabs">
+          <button type="button" class="tab-add-type active" data-tab="tab-add-kit">
+            <span>1. Trả bộ kit</span>
+            <span class="tab-badge" id="tab-kit-selected-count" hidden>0</span>
+          </button>
+          <button type="button" class="tab-add-type" data-tab="tab-add-cat-item">
+            <span>2. Trả linh kiện lẻ</span>
+            <span class="tab-badge" id="tab-item-selected-count" hidden>0</span>
+          </button>
+          <button type="button" class="tab-add-type" data-tab="tab-add-custom">
+            <span>3. Ngoài danh mục</span>
+          </button>
         </div>
 
-        <!-- TAB 1: THÊM BỘ TỪ CATALOG -->
+        <!-- TAB 1: TRẢ BỘ KIT (HIỆN ẢNH TỪ THƯ MỤC IMAGE, TÍCH CHỌN & NHẬP SỐ LƯỢNG) -->
         <div id="tab-add-kit" class="tab-add-pane">
-          <p class="muted text-sm" style="margin-bottom:12px;">Thêm 1 bộ thiết bị hoàn chỉnh (ví dụ ALPHA B, INTELL
-            E6,...) vào đơn thuê này.</p>
-          <div class="form-group" style="margin-bottom:12px;">
-            <label for="add-kit-select"><strong>Chọn bộ thiết bị *</strong></label>
-            <select id="add-kit-select" class="select-input" style="width:100%;"></select>
+          <div class="add-section-tip">
+            Tích chọn các bộ kit cần thêm vào đơn và nhập số lượng. Mã số từng bộ có thể nhập sau tại màn hình kiểm kê.
           </div>
-          <div class="form-group">
-            <label for="add-kit-code">Mã số bộ (vd: E6-05, để trống nếu chưa có)</label>
-            <input type="text" id="add-kit-code" class="text-input" placeholder="Mã định danh dán trên hộp..." />
+
+          <div id="add-kits-list" class="add-kits-grid">
+            <!-- Rendered dynamically via JS with images from Image folder -->
           </div>
         </div>
 
-        <!-- TAB 2: THÊM LINH KIỆN LẺ TỪ CATALOG -->
+        <!-- TAB 2: TRẢ LINH KIỆN LẺ (LỌC BỘ, TÌM KIẾM NHANH, DANH SÁCH ĐÃ TÍCH NẰM Ở TRÊN) -->
         <div id="tab-add-cat-item" class="tab-add-pane" hidden>
-          <p class="muted text-sm" style="margin-bottom:12px;">Chọn bộ thiết bị nguồn rồi tìm kiếm linh kiện lẻ theo
-            tên/mã từ bảng giá chuẩn.</p>
-          <div class="form-row" style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px;">
-            <div class="form-group">
-              <label for="add-cat-source-kit"><strong>Chọn bộ nguồn *</strong></label>
-              <select id="add-cat-source-kit" class="select-input" style="width:100%;"></select>
+          <div class="add-item-filters-bar">
+            <div class="filter-search-wrap">
+              <input type="text" id="add-items-search" class="text-input"
+                placeholder="Tìm kiếm theo mã hoặc tên linh kiện..." autocomplete="off" />
             </div>
-            <div class="form-group">
-              <label for="add-cat-item-qty"><strong>Số lượng thêm *</strong></label>
-              <input type="number" id="add-cat-item-qty" class="text-input" min="1" step="1" value="1" />
+            <div class="filter-select-wrap">
+              <select id="add-items-filter-kit" class="select-input">
+                <option value="">Tất cả các bộ</option>
+              </select>
             </div>
           </div>
-          <div class="form-group" style="margin-bottom:12px;">
-            <label for="add-cat-item-select"><strong>Chọn linh kiện lẻ *</strong></label>
-            <select id="add-cat-item-select" class="select-input" style="width:100%;"></select>
+
+          <!-- DANH SÁCH LINH KIỆN ĐÃ TÍCH CHỌN (NẰM Ở TRÊN DANH SÁCH CHỌN) -->
+          <div class="add-selected-panel" id="add-items-selected-panel" style="display:none;">
+            <div class="add-selected-panel-head">
+              <div class="selection-status">
+                <strong>Linh kiện đã chọn (<span id="add-items-sel-count">0</span>):</strong>
+                <span class="muted text-sm" style="margin-left:6px;">Tổng số lượng: <strong id="add-items-sel-total-qty">0</strong></span>
+              </div>
+              <button type="button" class="btn-clear-selection" id="btn-clear-item-selection">Bỏ chọn tất cả</button>
+            </div>
+            <div class="add-selected-items-scroll">
+              <div id="add-items-selected-chips" class="add-selected-chips-grid">
+                <!-- Rendered dynamically via JS -->
+              </div>
+            </div>
           </div>
-          <div id="add-cat-item-preview"
-            style="background:var(--surface-alt); border:1px solid var(--border); border-radius:6px; padding:10px 14px; font-size:13px; display:none;">
-            <!-- Live preview: Đơn giá, mã, ảnh -->
+
+          <!-- BẢNG CHỌN LINH KIỆN -->
+          <div class="add-items-table-wrap">
+            <table class="table add-items-table">
+              <thead>
+                <tr>
+                  <th style="width:44px; text-align:center;">Chọn</th>
+                  <th style="width:56px; text-align:center;">Ảnh</th>
+                  <th>Tên &amp; Mã linh kiện</th>
+                  <th style="width:130px;">Bộ gốc</th>
+                  <th style="width:120px; text-align:right;">Đơn giá</th>
+                  <th style="width:110px; text-align:center;">Số lượng</th>
+                </tr>
+              </thead>
+              <tbody id="add-items-tbody">
+                <!-- Rendered dynamically via JS -->
+              </tbody>
+            </table>
+            <div id="add-items-empty" class="empty-state" hidden style="padding:30px 10px;">
+              <p>Không tìm thấy linh kiện nào phù hợp với từ khóa hoặc bộ lọc.</p>
+            </div>
           </div>
         </div>
 
-        <!-- TAB 3: THÊM SẢN PHẨM TÙY CHỈNH -->
+        <!-- TAB 3: THÊM SẢN PHẨM NGOÀI DANH MỤC (CSS ĐẸP & CHUYÊN NGHIỆP) -->
         <div id="tab-add-custom" class="tab-add-pane" hidden>
-          <p class="muted text-sm" style="margin-bottom:12px;">Thêm sản phẩm, linh kiện hoặc phụ kiện ngoài danh mục
-            chuẩn.</p>
-          <div class="form-row" style="display:grid; grid-template-columns: 2fr 1fr; gap:12px; margin-bottom:12px;">
-            <div class="form-group">
-              <label for="add-custom-name"><strong>Tên sản phẩm / Linh kiện *</strong></label>
-              <input type="text" id="add-custom-name" class="text-input"
-                placeholder="Ví dụ: Cáp nối đặc biệt, Pin dự phòng..." />
-            </div>
-            <div class="form-group">
-              <label for="add-custom-unit">Đơn vị tính</label>
-              <input type="text" id="add-custom-unit" class="text-input" value="cái" />
-            </div>
+          <div class="add-section-tip">
+            Thêm thiết bị, cáp nối, phụ kiện hoặc quà tặng đặc biệt nằm ngoài danh mục chuẩn của hệ thống.
           </div>
-          <div class="form-row" style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px;">
-            <div class="form-group">
-              <label for="add-custom-qty"><strong>Số lượng *</strong></label>
-              <input type="number" id="add-custom-qty" class="text-input" min="1" step="1" value="1" />
+
+          <div class="custom-item-card-form">
+            <div class="edit-form-grid-2">
+              <div class="form-group">
+                <label for="add-custom-name"><strong>Tên sản phẩm / Linh kiện <span class="req-star">*</span></strong></label>
+                <input type="text" id="add-custom-name" class="text-input" placeholder="Ví dụ: Cáp nối chuyên dụng, Pin mở rộng..." />
+              </div>
+              <div class="form-group">
+                <label for="add-custom-unit">Đơn vị tính</label>
+                <input type="text" id="add-custom-unit" class="text-input" value="cái" placeholder="cái, bộ, sợi..." />
+              </div>
             </div>
-            <div class="form-group">
-              <label for="add-custom-price"><strong>Đơn giá bồi thường (VNĐ)</strong></label>
-              <input type="number" id="add-custom-price" class="text-input" min="0" step="1000" placeholder="0" />
+
+            <div class="edit-form-grid-2" style="margin-top:12px;">
+              <div class="form-group">
+                <label for="add-custom-qty"><strong>Số lượng <span class="req-star">*</span></strong></label>
+                <input type="number" id="add-custom-qty" class="text-input" min="1" step="1" placeholder="Nhập số lượng..." />
+              </div>
+              <div class="form-group">
+                <label for="add-custom-price">Đơn giá (VNĐ)</label>
+                <input type="number" id="add-custom-price" class="text-input" min="0" step="1000" placeholder="0" />
+              </div>
             </div>
-          </div>
-          <div class="form-group">
-            <label for="add-custom-note">Ghi chú linh kiện</label>
-            <input type="text" id="add-custom-note" class="text-input" placeholder="Ghi chú thêm nếu có..." />
+
+            <div class="form-group" style="margin-top:12px;">
+              <label for="add-custom-note">Ghi chú linh kiện</label>
+              <input type="text" id="add-custom-note" class="text-input" placeholder="Ghi chú thêm nếu có..." />
+            </div>
           </div>
         </div>
 
+        <!-- Tài khoản thực hiện (Lấy theo tài khoản đăng nhập) -->
         <div class="form-group actor-group" style="margin-top:14px;">
           <label for="add-item-actor">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:text-bottom; margin-right:4px;">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-              <circle cx="12" cy="7" r="4"></circle>
-            </svg>
             <strong>Tài khoản thực hiện</strong>
           </label>
           <input type="text" id="add-item-actor" class="text-input actor-input" placeholder="Tên tài khoản người dùng..." />
           <div class="actor-hint">Tự động nhận diện theo tài khoản đăng nhập của hệ thống.</div>
         </div>
       </div>
-      <div class="modal-foot" style="display:flex; justify-content:flex-end; gap:8px;">
+
+      <div class="modal-foot modal-add-rental-foot">
         <button type="button" class="btn btn-secondary" id="btn-cancel-add-items">Hủy</button>
-        <button type="button" class="btn btn-primary" id="btn-submit-add-items">+ Thêm vào đơn thuê</button>
+        <button type="button" class="btn btn-primary" id="btn-submit-add-items">
+          <span id="btn-submit-add-items-label">Thêm vào đơn thuê</span>
+        </button>
       </div>
     </div>
   </div>
@@ -1379,8 +1264,7 @@
         </div>
       </div>
       <div class="modal-foot" style="display:flex; justify-content:space-between; align-items:center;">
-        <button type="button" class="btn btn-outline btn-sm" id="btn-compare-open-add-modal">+ Thêm tiếp linh
-          kiện</button>
+        <button type="button" class="btn btn-outline btn-sm" id="btn-compare-open-add-modal">Thêm tiếp linh kiện</button>
         <button type="button" class="btn btn-secondary" id="btn-close-compare-kits-foot">Đóng</button>
       </div>
     </div>
@@ -1389,7 +1273,7 @@
   <!-- TOAST -->
   <div class="toast-container" id="toast-container"></div>
 
-  <script src="/static/js/app.js?v=28"></script>
+  <script src="/static/js/app.js?v=32"></script>
 </body>
 
 </html>

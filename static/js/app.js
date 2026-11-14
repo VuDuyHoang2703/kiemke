@@ -190,21 +190,35 @@
     if (draftDot) {
       draftDot.hidden = !(state.view !== "checkin" && hasCheckinDraft());
     }
-    const pill = $("active-ticket-pill");
+    const pill = $("nav-uninspected-pill") || $("active-ticket-pill");
     if (!pill) return;
-    const r = state.activeRental;
-    if (!r) {
-      pill.hidden = true;
-      pill.className = "active-ticket-pill";
-      pill.textContent = "";
-      return;
+
+    let uninspectedReturnedCount = 0;
+    if (state.rentals && Array.isArray(state.rentals)) {
+      for (const r of state.rentals) {
+        const retInfo = getReturnStatusInfo(r);
+        if (retInfo.isReturned && r.status === "pending") {
+          uninspectedReturnedCount++;
+        }
+      }
     }
-    pill.hidden = false;
-    pill.className = `active-ticket-pill pill-status-${r.status}`;
-    const shortStatus =
-      r.status === "completed" ? "Hoàn tất" : r.status === "inspecting" ? "Đang kiểm kê" : "Chờ kiểm kê";
-    pill.textContent = `Phiếu: ${r.code} · ${r.team_name} · ${shortStatus}`;
-    pill.title = `Phiếu đang mở: ${r.code} (${r.team_name}) — ${getStatusLabel(r.status)}. Nhấn để mở nhanh.`;
+
+    const txtEl = $("nav-uninspected-text");
+    if (uninspectedReturnedCount > 0) {
+      const msg = `Đã trả chưa kiểm: ${uninspectedReturnedCount} đơn`;
+      if (txtEl) txtEl.textContent = msg;
+      else pill.textContent = msg;
+      pill.className = "nav-uninspected-pill";
+      pill.title = `Có ${uninspectedReturnedCount} đơn đã bàn giao thiết bị về kho nhưng chưa kiểm kê. Bấm để lọc danh sách.`;
+      pill.hidden = false;
+    } else {
+      const msg = `0 đơn đã trả chưa kiểm`;
+      if (txtEl) txtEl.textContent = msg;
+      else pill.textContent = msg;
+      pill.className = "nav-uninspected-pill pill-empty";
+      pill.title = `Hiện không có đơn nào đã trả thiết bị mà chưa kiểm kê.`;
+      pill.hidden = false;
+    }
   }
 
   function openStep1Confirm({ title, message, okLabel = "Xác nhận", onConfirm }) {
@@ -1189,9 +1203,9 @@
       const nameEl = $("crm-file-chosen-name");
       if (nameEl) {
         if (file) {
-          nameEl.textContent = `📄 File: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+          nameEl.textContent = `File: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
         } else {
-          nameEl.textContent = `📄 File mẫu: CRM_Saleorder_12.11.2026_13.57.52_512.xlsx (100 đơn hàng)`;
+          nameEl.textContent = `File mẫu: CRM_Saleorder_12.11.2026_13.57.52_512.xlsx (100 đơn hàng)`;
         }
         nameEl.hidden = false;
       }
@@ -1202,29 +1216,44 @@
       if ($("crm-kpi-dup")) $("crm-kpi-dup").textContent = String(data.duplicate_count);
       if ($("crm-kpi-nokits")) $("crm-kpi-nokits").textContent = String(data.loose_count || data.no_kits_count || 0);
 
+      const updCount = data.update_return_count || 0;
+      const updateCard = $("crm-kpi-card-update");
+      const updateFilterBtn = $("crm-filter-update");
+      if (updateCard) {
+        updateCard.hidden = updCount === 0;
+        if ($("crm-kpi-update")) $("crm-kpi-update").textContent = String(updCount);
+      }
+      if (updateFilterBtn) {
+        updateFilterBtn.hidden = updCount === 0;
+        updateFilterBtn.textContent = `Cập nhật Đã trả (${updCount})`;
+      }
+
+      const totalActionable = data.new_count + updCount;
       const confirmBtn = $("btn-crm-confirm-import");
       const confirmText = $("crm-confirm-import-text");
       if (confirmBtn && confirmText) {
-        if (data.new_count > 0) {
+        if (totalActionable > 0) {
           confirmBtn.disabled = false;
-          confirmText.textContent = `Tiến hành nạp (${data.new_count} đơn mới) vào hệ thống`;
+          let label = `Tiến hành nạp (${data.new_count} đơn mới`;
+          if (updCount > 0) label += ` + cập nhật ${updCount} đơn sang Đã trả`;
+          label += `) vào hệ thống`;
+          confirmText.textContent = label;
         } else {
           confirmBtn.disabled = true;
-          confirmText.textContent = `Không có đơn mới (tất cả ${data.duplicate_count} đơn đã có trong hệ thống)`;
+          confirmText.textContent = `Không có đơn mới hay cập nhật (tất cả ${data.duplicate_count} đơn đã có trong hệ thống)`;
         }
       }
 
       if ($("crm-preview-container")) $("crm-preview-container").hidden = false;
       renderCrmPreviewTable();
 
-      if (data.new_count > 0) {
-        showToast(
-          `Đã phát hiện ${data.new_count} đơn mới sẵn sàng nạp (${data.duplicate_count} đơn cũ đã có trong hệ thống sẽ được bỏ qua).`,
-          "success"
-        );
+      if (totalActionable > 0) {
+        let msg = `Tìm thấy ${data.new_count} đơn mới`;
+        if (updCount > 0) msg += ` và ${updCount} đơn được cập nhật trạng thái "Đã trả" theo CRM mới`;
+        showToast(msg + "!", "success");
       } else {
         showToast(
-          `Tất cả ${data.duplicate_count} đơn trong file đều đã có trong hệ thống kiểm kê (chống trùng lặp tuyệt đối).`,
+          `Tất cả ${data.duplicate_count} đơn trong file đều đã có trong hệ thống kiểm kê và không có thay đổi trạng thái.`,
           "info"
         );
       }
@@ -1291,6 +1320,7 @@
 
     const filtered = (state.crmPreviewData.orders || []).filter((o) => {
       if (f === "new" && o.status !== "new") return false;
+      if (f === "update_return" && o.status !== "update_return") return false;
       if (f === "duplicate" && o.status !== "duplicate") return false;
       if (f === "no_kits" && !o.is_loose && o.status !== "no_kits") return false;
       if (f === "loose" && !o.is_loose) return false;
@@ -1315,7 +1345,9 @@
       const tr = document.createElement("tr");
 
       let badgeHtml = "";
-      if (o.status === "new") {
+      if (o.status === "update_return") {
+        badgeHtml = `<span class="pill-new" style="background:#dcfce7; color:#15803d; border:1px solid #bbf7d0;">Cập nhật: Đã trả</span>`;
+      } else if (o.status === "new") {
         if (o.is_loose) {
           badgeHtml = `<span class="pill-new" style="background:#fef3c7; color:#92400e; border:1px solid #fde68a;">Phụ kiện lẻ (Mới)</span>`;
         } else {
@@ -1346,7 +1378,7 @@
           isOvd = new Date(y, m - 1, d, 23, 59, 59, 999).getTime() < Date.now();
         }
         if (isOvd && !o.is_already_returned) {
-          dueHtml = `<div><span class="badge-due badge-overdue" style="font-size:11px;">⚠️ Quá hạn (${escapeHtml(o.due_date)})</span></div>`;
+          dueHtml = `<div><span class="badge-due badge-overdue" style="font-size:11px;">Quá hạn (${escapeHtml(o.due_date)})</span></div>`;
         } else {
           dueHtml = `<div><span class="badge-due">Hạn: ${escapeHtml(o.due_date)}</span></div>`;
         }
@@ -1376,8 +1408,10 @@
   }
 
   async function executeCrmImport() {
-    if (!state.crmPreviewData || state.crmPreviewData.new_count === 0) {
-      showToast("Không có đơn hàng mới nào để nạp.", "warning");
+    const newCount = state.crmPreviewData?.new_count || 0;
+    const updCount = state.crmPreviewData?.update_return_count || 0;
+    if (!state.crmPreviewData || (newCount === 0 && updCount === 0)) {
+      showToast("Không có đơn hàng mới hoặc cập nhật nào để nạp.", "warning");
       return;
     }
 
@@ -1421,54 +1455,109 @@
   }
 
   // --- VIEW 2: Teams List ---
+  function getReturnStatusInfo(rental) {
+    const rawReturn = String(rental.return_status || "Đã trả").trim();
+    const isReturned = (
+      rawReturn === "Đã trả" ||
+      rawReturn === "Đã trả đúng hạn" ||
+      rawReturn === "Đã trả toàn bộ" ||
+      rawReturn === "Đã trả hết"
+    );
+
+    let dueTime = NaN;
+    if (rental.due_date) {
+      const rawDue = String(rental.due_date).trim().slice(0, 10);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(rawDue)) {
+        const [y, m, d] = rawDue.split("-").map(Number);
+        dueTime = new Date(y, m - 1, d, 23, 59, 59, 999).getTime();
+      } else {
+        const parsed = new Date(rental.due_date);
+        if (!isNaN(parsed.getTime())) {
+          parsed.setHours(23, 59, 59, 999);
+          dueTime = parsed.getTime();
+        }
+      }
+    }
+
+    const now = new Date();
+    const hasDue = !isNaN(dueTime);
+    const isPastDue = hasDue && (now.getTime() > dueTime);
+    let overdueDays = 0;
+    if (isPastDue) {
+      const diffMs = now.getTime() - dueTime;
+      overdueDays = Math.max(1, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+    }
+
+    // Phân định 3 trạng thái trả hàng liên kết với hạn trả:
+    // 1. Đã trả (Đã trả đúng hạn): Khách đã mang đồ về kho -> KHÔNG BAO GIỜ bị tính quá hạn
+    // 2. Chưa trả (Còn hạn): Chưa trả nhưng còn trong thời hạn
+    // 3. Chưa trả (Hết hạn): Chưa trả và đã quá hạn trả hàng
+    if (isReturned) {
+      return {
+        key: "returned",
+        label: "Đã trả",
+        shortLabel: "Đã trả",
+        fullLabel: "Đã trả thiết bị về kho",
+        badgeClass: "badge-returned",
+        isReturned: true,
+        isOverdue: false,
+        days: 0,
+      };
+    } else if (isPastDue) {
+      return {
+        key: "unreturned_overdue",
+        label: "Chưa trả (Hết hạn)",
+        shortLabel: "Chưa trả (Hết hạn)",
+        fullLabel: `Chưa trả (Quá hạn ${overdueDays} ngày)`,
+        badgeClass: "badge-unreturned-overdue",
+        isReturned: false,
+        isOverdue: true,
+        days: overdueDays,
+      };
+    } else {
+      return {
+        key: "unreturned_ontime",
+        label: "Chưa trả (Còn hạn)",
+        shortLabel: "Chưa trả (Còn hạn)",
+        fullLabel: "Chưa trả (Còn trong hạn)",
+        badgeClass: "badge-unreturned-ontime",
+        isReturned: false,
+        isOverdue: false,
+        days: 0,
+      };
+    }
+  }
+
+  function getOverdueInfo(rental) {
+    const retInfo = getReturnStatusInfo(rental);
+    return { isOverdue: retInfo.isOverdue, days: retInfo.days };
+  }
+
   function getRentalStatusBadge(rental) {
     const sum = rental.summary || {};
-    const retStatus = rental.return_status || "Đã trả";
-    const isReturned = retStatus === "Đã trả";
-    const retBadge = `<span class="badge-return ${isReturned ? 'badge-returned' : 'badge-unreturned'}">${escapeHtml(retStatus)}</span>`;
+    const retInfo = getReturnStatusInfo(rental);
+    const retBadge = `<span class="badge-return ${retInfo.badgeClass}" title="Tình trạng thiết bị: ${escapeHtml(retInfo.fullLabel)}">${escapeHtml(retInfo.label)}</span>`;
 
     let inspectBadge = "";
     if (rental.status === "completed") {
       if (sum.shortage_items_count > 0) {
-        inspectBadge = `<span class="status-pill status-shortage">Thiếu ${sum.shortage_items_count} món</span>`;
+        inspectBadge = `<span class="status-pill status-shortage" title="Đã kiểm kê: Phát hiện thiếu linh kiện">Thiếu (${sum.shortage_items_count})</span>`;
       } else {
-        inspectBadge = `<span class="status-pill status-completed">Đủ 100%</span>`;
+        inspectBadge = `<span class="status-pill status-completed" title="Đã kiểm kê: Đủ 100% linh kiện">Đủ</span>`;
       }
     } else if (rental.status === "inspecting") {
       const missText = sum.shortage_items_count > 0 ? ` · Thiếu ${sum.shortage_items_count}` : "";
-      inspectBadge = `<span class="status-pill status-inspecting">Đang kiểm (${sum.checked_count}/${sum.total_items})${missText}</span>`;
+      inspectBadge = `<span class="status-pill status-inspecting" title="Đang trong quá trình kiểm kê">Đang kiểm (${sum.checked_count}/${sum.total_items})${missText}</span>`;
     } else {
-      inspectBadge = `<span class="status-pill status-pending">Chưa kiểm kê</span>`;
+      inspectBadge = `<span class="status-pill status-pending" title="Chưa tiến hành kiểm kê linh kiện">Chưa kiểm</span>`;
     }
 
-    return `<div style="display:flex; flex-direction:column; align-items:flex-start; gap:3px;">${retBadge}${inspectBadge}</div>`;
-  }
-
-  function getOverdueInfo(rental) {
-    if (!rental || !rental.due_date || rental.status === "completed") {
-      return { isOverdue: false, days: 0 };
-    }
-    const rawDue = String(rental.due_date).trim().slice(0, 10);
-    let dueTime = NaN;
-    if (/^\d{4}-\d{2}-\d{2}$/.test(rawDue)) {
-      const [y, m, d] = rawDue.split("-").map(Number);
-      dueTime = new Date(y, m - 1, d, 23, 59, 59, 999).getTime();
-    } else {
-      const parsed = new Date(rental.due_date);
-      if (!isNaN(parsed.getTime())) {
-        parsed.setHours(23, 59, 59, 999);
-        dueTime = parsed.getTime();
-      }
-    }
-    if (isNaN(dueTime)) return { isOverdue: false, days: 0 };
-
-    const now = new Date();
-    if (now.getTime() > dueTime) {
-      const diffMs = now.getTime() - dueTime;
-      const days = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-      return { isOverdue: true, days: Math.max(1, days) };
-    }
-    return { isOverdue: false, days: 0 };
+    return `
+      <div class="status-cell-wrap">
+        <div class="status-item"><span class="status-type-label">Trả hàng:</span>${retBadge}</div>
+        <div class="status-item"><span class="status-type-label">Kiểm kê:</span>${inspectBadge}</div>
+      </div>
+    `;
   }
 
   function renderTeamsList() {
@@ -1480,11 +1569,14 @@
     let doneCount = 0;
     let overdueCount = 0;
     let totalCompAll = 0;
+    let uninspectedReturnedCount = 0;
     for (const r of state.rentals) {
       if (r.status === "completed") doneCount++;
       else activeCount++;
       totalCompAll += Number(r.summary?.total_compensation || 0);
-      if (getOverdueInfo(r).isOverdue) overdueCount++;
+      const retInfo = getReturnStatusInfo(r);
+      if (retInfo.isOverdue) overdueCount++;
+      if (retInfo.isReturned && r.status === "pending") uninspectedReturnedCount++;
     }
     $("kpi-total-teams").textContent = String(state.rentals.length);
     $("kpi-active-teams").textContent = String(activeCount);
@@ -1494,13 +1586,20 @@
     if (kpiOverdueEl) kpiOverdueEl.textContent = String(overdueCount);
     const filterOverdueSpan = $("kpi-filter-overdue");
     if (filterOverdueSpan) filterOverdueSpan.textContent = String(overdueCount);
+    const filterUninspectedSpan = $("kpi-filter-returned-uninspected");
+    if (filterUninspectedSpan) filterUninspectedSpan.textContent = String(uninspectedReturnedCount);
 
     const filtered = state.rentals.filter((r) => {
-      if (f === "overdue" && !getOverdueInfo(r).isOverdue) return false;
+      const retInfo = getReturnStatusInfo(r);
+      if (f === "overdue" && !retInfo.isOverdue) return false;
+      if (f === "unreturned_overdue" && retInfo.key !== "unreturned_overdue") return false;
+      if (f === "unreturned_ontime" && retInfo.key !== "unreturned_ontime") return false;
+      if (f === "returned" && retInfo.key !== "returned") return false;
+      if (f === "returned_uninspected" && (!retInfo.isReturned || r.status !== "pending")) return false;
       if (f === "pending" && r.status !== "pending") return false;
       if (f === "inspecting" && r.status !== "inspecting") return false;
       if (f === "sufficient" && (r.status !== "completed" || (r.summary?.shortage_items_count || 0) > 0)) return false;
-      if (f === "has_shortage" && (r.summary?.shortage_items_count || 0) === 0) return false;
+      if (f === "has_shortage" && (r.status !== "completed" || (r.summary?.shortage_items_count || 0) === 0)) return false;
       if (q) {
         const kitsText = (r.kits || []).map((k) => `${k.display_label} ${k.kit_code || ""}`).join(" ");
         const hay = normalizeText(
@@ -1517,8 +1616,8 @@
 
     for (const r of filtered) {
       const tr = document.createElement("tr");
-      const overdueInfo = getOverdueInfo(r);
-      if (overdueInfo.isOverdue) {
+      const retInfo = getReturnStatusInfo(r);
+      if (retInfo.isOverdue) {
         tr.classList.add("row-overdue");
       }
       if (state.lastCreatedId === r.id) {
@@ -1532,33 +1631,34 @@
       const isCompleted = r.status === "completed";
       const hasShortage = Number(r.summary?.shortage_items_count || 0) > 0;
       const suppBtnHtml = (isCompleted && hasShortage)
-        ? `<button class="btn btn-warning btn-sm act-supplementary" title="Khách mang trả thêm linh kiện bị thiếu">+ Trả bổ sung</button>`
+        ? `<button class="btn btn-warning btn-sm act-supplementary" title="Khách mang trả thêm linh kiện bị thiếu">Trả bổ sung</button>`
         : "";
 
-      const actionsHtml = isCompleted
-        ? `
+      let actionsHtml = "";
+      if (isCompleted) {
+        actionsHtml = `
           ${suppBtnHtml}
           <button class="btn btn-primary btn-sm act-report">Xem báo cáo</button>
-        `
-        : isPending
-        ? `
-          <button class="btn btn-primary btn-sm act-inspect">Kiểm kê</button>
-        `
-        : `
-          <button class="btn btn-primary btn-sm act-inspect">Kiểm kê</button>
-          <button class="btn btn-outline btn-sm act-report">Thống kê</button>
         `;
+      } else if (retInfo.isReturned) {
+        actionsHtml = `
+          <button class="btn btn-primary btn-sm act-inspect">Kiểm kê</button>
+        `;
+      } else {
+        actionsHtml = `
+          <button class="btn btn-success btn-sm act-receive-return" data-id="${r.id}" title="Khách mang hàng đến trả: Bấm để xác nhận đã nhận thiết bị về kho và bắt đầu kiểm kê">Nhận hàng trả</button>
+        `;
+      }
 
       const compHtml = isPending
         ? `<span class="muted" title="Chưa kiểm kê">—</span>`
         : `<strong class="${comp > 0 ? "text-red" : "muted"}">${formatMoney(comp)}</strong>`;
 
       const dueHtml = r.due_date
-        ? overdueInfo.isOverdue
+        ? retInfo.isOverdue
           ? `<div>
-               <span class="badge-due badge-overdue" title="Đã quá hạn ${overdueInfo.days} ngày so với hạn trả hàng!">
-                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                 Quá hạn ${overdueInfo.days} ngày (${escapeHtml(r.due_date)})
+               <span class="badge-due badge-overdue" title="Đã quá hạn ${retInfo.days} ngày so với hạn trả hàng!">
+                 Quá hạn ${retInfo.days} ngày (${escapeHtml(r.due_date)})
                </span>
              </div>`
           : `<div><span class="badge-due">Hạn: ${escapeHtml(r.due_date)}</span></div>`
@@ -1566,10 +1666,10 @@
 
       let teamSubHtml = "";
       if (r.is_edited) {
-        teamSubHtml += `<div style="margin-top:4px;"><button type="button" class="btn-xs-pill btn-orig-info act-view-orig" data-id="${r.id}" title="Xem thông tin gốc trước khi sửa">🕒 Đã sửa (Xem gốc)</button></div>`;
+        teamSubHtml += `<div style="margin-top:4px;"><button type="button" class="btn-xs-pill btn-orig-info act-view-orig" data-id="${r.id}" title="Xem thông tin gốc trước khi sửa">Đã sửa (Xem gốc)</button></div>`;
       }
       if (r.has_added_items) {
-        teamSubHtml += `<div style="margin-top:4px;"><button type="button" class="btn-xs-pill btn-added-items act-view-added" data-id="${r.id}" title="Xem các bộ / linh kiện được thêm vào">🧩 +Đã thêm đồ (So sánh)</button></div>`;
+        teamSubHtml += `<div style="margin-top:4px;"><button type="button" class="btn-xs-pill btn-added-items act-view-added" data-id="${r.id}" title="Xem các bộ / linh kiện được thêm vào">Đã thêm đồ (So sánh)</button></div>`;
       }
 
       tr.innerHTML = `
@@ -1586,7 +1686,7 @@
           <div class="text-sm muted">${escapeHtml(r.phone)}</div>
           ${
             r.email
-              ? `<div class="text-sm muted gmail-inline" title="${escapeHtml(r.email)}">&#9993; ${escapeHtml(
+              ? `<div class="text-sm muted gmail-inline" title="${escapeHtml(r.email)}">${escapeHtml(
                   r.email
                 )}</div>`
               : ""
@@ -1611,6 +1711,13 @@
       const inspectBtn = tr.querySelector(".act-inspect");
       if (inspectBtn) {
         inspectBtn.addEventListener("click", () => openInspectForRental(r.id));
+      }
+      const receiveReturnBtn = tr.querySelector(".act-receive-return");
+      if (receiveReturnBtn) {
+        receiveReturnBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          handleReceiveReturn(r.id);
+        });
       }
       const reportBtn = tr.querySelector(".act-report");
       if (reportBtn) {
@@ -1662,6 +1769,31 @@
       kd.is_loose_order === true ||
       (typeof kd.kit_name === "string" && kd.kit_name.toLowerCase().includes("phụ kiện"))
     );
+  }
+
+  async function handleReceiveReturn(rentalId) {
+    const r = state.rentals.find((x) => x.id === rentalId) || state.activeRental;
+    const codeName = r ? r.code : `đơn #${rentalId}`;
+    if (!confirm(`Xác nhận khách đã mang bàn giao trả lại thiết bị cho đơn ${codeName}?\n\nSau khi nhận hàng, hệ thống sẽ chuyển trạng thái sang "Đã trả" và mở màn hình kiểm kê ngay.`)) {
+      return;
+    }
+    try {
+      const res = await api(`/api/rentals/${rentalId}/receive-return`, {
+        method: "POST",
+        body: { actor: getCurrentStaffName() },
+      });
+      showToast(`Đã nhận hàng trả cho đơn ${res.rental.code}! Bắt đầu kiểm kê.`, "success");
+      const idx = state.rentals.findIndex((x) => x.id === rentalId);
+      if (idx !== -1) {
+        state.rentals[idx] = res.rental;
+      }
+      state.activeRental = res.rental;
+      renderTeamsList();
+      updateTopbarStatusUI();
+      openInspectForRental(rentalId);
+    } catch (err) {
+      showToast(err.message || "Lỗi khi ghi nhận nhận hàng", "error");
+    }
   }
 
   // --- VIEW 3: Inspection Workspace ---
@@ -1796,7 +1928,7 @@
       notice.hidden = !isCompleted;
       if (noticeText) {
         if (hasDirty) {
-          noticeText.innerHTML = `<strong>Đang có ${state.dirtyEntries.size} thay đổi chưa lưu trên phiếu đã hoàn tất</strong>. Bạn có thể bấm <strong>"Lưu chỉnh sửa"</strong> ngay tại đây hoặc bấm <strong>"Thống kê &amp; Lưu chỉnh sửa →"</strong> để đối soát lại trước khi lưu.`;
+          noticeText.innerHTML = `<strong>Đang có ${state.dirtyEntries.size} thay đổi chưa lưu trên phiếu đã hoàn tất</strong>. Bạn có thể bấm <strong>"Lưu chỉnh sửa"</strong> ngay tại đây hoặc bấm <strong>"Thống kê &amp; Lưu chỉnh sửa"</strong> để đối soát lại trước khi lưu.`;
         } else {
           noticeText.innerHTML = `<strong>Phiếu đã hoàn tất kiểm kê</strong> — Đang mở ở chế độ <strong>cho phép chỉnh sửa số lượng</strong>. Sau khi chỉnh xong, vui lòng bấm <strong>"Lưu chỉnh sửa"</strong> hoặc <strong>"Thống kê &amp; Báo cáo"</strong> để ghi nhận nhật ký ngày giờ.`;
         }
@@ -1808,7 +1940,7 @@
 
     const btnGoto = $("btn-goto-report");
     const btnSticky = $("btn-sticky-report");
-    const btnText = hasDirty ? "Thống kê & Lưu chỉnh sửa →" : "Thống kê & Báo cáo";
+    const btnText = hasDirty ? "Thống kê & Lưu chỉnh sửa" : "Thống kê & Báo cáo";
     if (btnGoto) {
       const span = btnGoto.querySelector("span");
       if (span) span.textContent = btnText;
@@ -1947,11 +2079,21 @@
     $("insp-note-wrap").hidden = !rental.note;
     $("insp-note").textContent = rental.note || "";
 
+    const retInfo = getReturnStatusInfo(rental);
+    const unreturnedNotice = $("insp-unreturned-notice");
+    if (unreturnedNotice) {
+      unreturnedNotice.hidden = retInfo.isReturned || rental.status === "completed";
+      const btnReceiveInsp = $("btn-insp-receive-return");
+      if (btnReceiveInsp) {
+        btnReceiveInsp.onclick = () => handleReceiveReturn(rental.id);
+      }
+    }
+
     const returnBadge = $("insp-badge-return");
     if (returnBadge) {
-      const retStat = rental.return_status || "Đã trả";
-      returnBadge.textContent = retStat;
-      returnBadge.className = `badge-return ${retStat === "Đã trả" ? "badge-returned" : "badge-unreturned"}`;
+      returnBadge.textContent = retInfo.fullLabel || retInfo.label;
+      returnBadge.className = `badge-return ${retInfo.badgeClass}`;
+      returnBadge.title = `Tình trạng trả thiết bị: ${retInfo.fullLabel}`;
     }
 
     const btnViewOrig = $("insp-btn-view-orig");
@@ -1992,7 +2134,7 @@
       const allBtn = document.createElement("button");
       allBtn.className = `kit-tab ${state.activeKitTab === "all" ? "active" : ""}`;
       allBtn.dataset.rkId = "all";
-      allBtn.innerHTML = `<span>Tất cả (${rental.kit_details.length} bộ · ${rental.summary.total_items} LK)</span><span class="tab-miss" ${
+      allBtn.innerHTML = `<span>Tất cả (${rental.kit_details.length} bộ)</span><span class="tab-miss" ${
         rental.summary.shortage_items_count === 0 ? "hidden" : ""
       }>Thiếu ${rental.summary.shortage_items_count}</span>`;
       allBtn.addEventListener("click", () => {
@@ -2007,10 +2149,8 @@
       const btn = document.createElement("button");
       btn.className = `kit-tab ${state.activeKitTab === kd.rental_kit_id ? "active" : ""}`;
       btn.dataset.rkId = String(kd.rental_kit_id);
-      const addedTag = kd.is_added_after ? ' <em style="font-size:10px; color:var(--green); font-weight:700;">[+Thêm]</em>' : '';
-      btn.innerHTML = `<span class="tab-label">${escapeHtml(kd.display_label)}${addedTag}</span> <span>(${
-        kd.total_items
-      })</span><span class="tab-miss" ${kd.missing_items_count === 0 ? "hidden" : ""}>Thiếu ${
+      const addedTag = kd.is_added_after ? ' <em style="font-size:10px; color:var(--green); font-weight:700;">[Thêm]</em>' : '';
+      btn.innerHTML = `<span class="tab-label">${escapeHtml(kd.display_label)}${addedTag}</span><span class="tab-miss" ${kd.missing_items_count === 0 ? "hidden" : ""}>Thiếu ${
         kd.missing_items_count
       }</span>`;
       btn.addEventListener("click", () => {
@@ -2031,7 +2171,7 @@
       codeBar.hidden = false;
       const instDesc =
         activeKd.same_type_total > 1
-          ? `${activeKd.kit_name} — Bộ ${activeKd.instance_index}/${activeKd.same_type_total}`
+          ? `${activeKd.kit_name} — Bộ ${activeKd.instance_index}`
           : activeKd.kit_name;
       $("insp-kit-code-label").textContent = `Mã bộ (${instDesc}):`;
       const input = $("insp-kit-code-input");
@@ -2113,7 +2253,7 @@
       }
 
       if (statusEl) {
-        statusEl.textContent = newCode ? "✓ Đã tự động lưu" : "✓ Đã xóa mã";
+        statusEl.textContent = newCode ? "Đã tự động lưu" : "Đã xóa mã";
         statusEl.style.color = "#059669";
         statusEl.hidden = false;
         clearTimeout(statusEl._timer);
@@ -2139,7 +2279,7 @@
       if (!silent) {
         showToast(err.message || "Lỗi lưu mã bộ", "error");
       } else if (statusEl) {
-        statusEl.textContent = "⚠️ " + err.message;
+        statusEl.textContent = err.message;
         statusEl.style.color = "#dc2626";
         statusEl.hidden = false;
       }
@@ -2320,8 +2460,7 @@
           <td colspan="${hasAnyCodes ? 10 : 9}">
             <div class="kit-divider-inner">
               <div>
-                <strong class="kit-divider-title">Bộ robot: ${escapeHtml(kd.display_label)}</strong>
-                <span class="muted text-sm" style="margin-left:8px">(${filteredItems.length} linh kiện hiển thị)</span>
+                <strong class="kit-divider-title">Bộ: ${escapeHtml(kd.display_label)}</strong>
               </div>
               ${codeDisplay}
             </div>
@@ -2705,7 +2844,7 @@
       toggleBtn.className = "btn btn-outline";
     } else {
       backInspectBtn.hidden = false;
-      backInspectBtn.textContent = "← Quay lại kiểm kê";
+      backInspectBtn.textContent = "Quay lại kiểm kê";
       toggleBtn.textContent = "Hoàn tất kiểm kê & Ghi nhận";
       toggleBtn.disabled = false;
       toggleBtn.className = "btn btn-success";
@@ -2875,8 +3014,7 @@
 
       returnedBoxHtml = `
         <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:10px 14px; margin-bottom:14px;">
-          <div style="font-size:13px; font-weight:700; color:#166534; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+          <div style="font-size:13px; font-weight:700; color:#166534; margin-bottom:6px;">
             <span>Linh kiện đã nhận bàn giao trả thêm trong đợt này:</span>
           </div>
           <div class="table-responsive">
@@ -2903,8 +3041,8 @@
     if (shortageItems.length === 0) {
       tableHtml = `
         <div style="background:#ecfdf5; border:1px solid #a7f3d0; border-radius:8px; padding:16px; text-align:center; color:#065f46;">
-          <div style="font-size:14.5px; font-weight:700;">✓ KHÁCH HÀNG ĐÃ TRẢ ĐỦ TOÀN BỘ 100% LINH KIỆN — KHÔNG CÒN NỢ MÓN NÀO!</div>
-          <div style="font-size:13px; margin-top:4px;">Tổng tiền bồi thường phải thanh toán sau đợt này: <strong>0 ₫</strong></div>
+          <div style="font-size:14.5px; font-weight:700;">KHÁCH HÀNG ĐÃ TRẢ ĐỦ TOÀN BỘ 100% LINH KIỆN — KHÔNG CÒN NỢ MÓN NÀO!</div>
+          <div style="font-size:13px; margin-top:4px;">Tổng tiền phải thanh toán sau đợt này: <strong>0 ₫</strong></div>
         </div>
       `;
     } else {
@@ -3047,14 +3185,7 @@
     } catch (err) {
       showToast("Lỗi khi lưu chỉnh sửa: " + err.message, "error");
     } finally {
-      const saveBtnIconHtml = `
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-          <polyline points="17 21 17 13 7 13 7 21"/>
-          <polyline points="7 3 7 8 15 8"/>
-        </svg>
-        <span>Lưu chỉnh sửa</span>
-      `;
+      const saveBtnIconHtml = `<span>Lưu chỉnh sửa</span>`;
       if (saveBtn) {
         saveBtn.disabled = false;
         saveBtn.innerHTML = saveBtnIconHtml;
@@ -3542,12 +3673,7 @@
       showToast(err.message || "Lỗi lưu trả bổ sung", "error");
     } finally {
       submitBtn.disabled = false;
-      submitBtn.innerHTML = `
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
-          <path d="M20 6 9 17l-5-5"/>
-        </svg>
-        <span id="supp-submit-btn-text">✓ Lưu đợt trả bổ sung</span>
-      `;
+      submitBtn.innerHTML = `<span id="supp-submit-btn-text">Lưu đợt trả bổ sung</span>`;
     }
   }
 
@@ -3557,10 +3683,16 @@
       btn.addEventListener("click", () => switchView(btn.dataset.view, { viaNav: true }));
     });
 
-    $("active-ticket-pill").addEventListener("click", () => {
-      const r = state.activeRental;
-      if (!r) return;
-      switchView(r.status === "completed" ? "report" : "inspect", { viaNav: true });
+    const uninspPill = $("nav-uninspected-pill") || $("active-ticket-pill");
+    uninspPill?.addEventListener("click", () => {
+      switchView("teams", { viaNav: true });
+      const targetBtn = document.querySelector("#team-filter-pills [data-filter='returned_uninspected']");
+      if (targetBtn) {
+        targetBtn.click();
+      } else {
+        state.teamFilter = "returned_uninspected";
+        renderTeamsList();
+      }
     });
 
     document.querySelectorAll("[data-goto]").forEach((btn) => {
@@ -3988,6 +4120,19 @@
       });
     });
 
+    $("add-items-search")?.addEventListener("input", () => {
+      renderAddItemsCatalogTable();
+    });
+    $("add-items-filter-kit")?.addEventListener("change", () => {
+      renderAddItemsCatalogTable();
+    });
+    $("btn-clear-item-selection")?.addEventListener("click", () => {
+      addItemsSelectedComponents.clear();
+      renderAddItemsCatalogTable();
+      renderAddItemsSelectedPanel();
+      updateAddItemsSelectionSummary();
+    });
+
     // Compare Added Kits Modal Handlers
     const closeCompareKitsModal = () => {
       $("modal-compare-added-kits").hidden = true;
@@ -4167,6 +4312,330 @@
   }
 
   let addItemsCurrentRentalId = null;
+  const addItemsSelectedKits = new Map(); // kit_id -> qty
+  const addItemsSelectedComponents = new Map(); // key `${source_kit_id}:${item_id}` -> { source_kit_id, item, qty }
+  let allCatalogComponentsList = [];
+
+  function buildAllCatalogComponentsList() {
+    if (allCatalogComponentsList.length > 0) return allCatalogComponentsList;
+    const list = [];
+    for (const kit of (state.catalog?.kits || [])) {
+      for (const item of (kit.items || [])) {
+        list.push({
+          ...item,
+          source_kit_id: kit.id,
+          source_kit_name: kit.name,
+        });
+      }
+    }
+    allCatalogComponentsList = list;
+    return allCatalogComponentsList;
+  }
+
+  function updateAddItemsSelectionSummary() {
+    const kitCountEl = $("tab-kit-selected-count");
+    if (kitCountEl) {
+      let totalKitQty = 0;
+      addItemsSelectedKits.forEach((q) => {
+        const num = parseInt(q);
+        if (!isNaN(num) && num > 0) totalKitQty += num;
+      });
+      kitCountEl.textContent = String(totalKitQty);
+      kitCountEl.hidden = totalKitQty === 0;
+    }
+
+    const itemBadgeEl = $("tab-item-selected-count");
+    const count = addItemsSelectedComponents.size;
+    let totalCompQty = 0;
+    addItemsSelectedComponents.forEach((val) => {
+      const num = parseInt(val.qty);
+      if (!isNaN(num) && num > 0) totalCompQty += num;
+    });
+
+    if (itemBadgeEl) {
+      itemBadgeEl.textContent = String(count);
+      itemBadgeEl.hidden = count === 0;
+    }
+
+    const selCountEl = $("add-items-sel-count");
+    if (selCountEl) selCountEl.textContent = String(count);
+    const selQtyEl = $("add-items-sel-total-qty");
+    if (selQtyEl) selQtyEl.textContent = String(totalCompQty);
+  }
+
+  function renderAddKitsTab() {
+    const container = $("add-kits-list");
+    if (!container) return;
+    container.innerHTML = "";
+
+    const kits = state.catalog?.kits || [];
+    for (const kit of kits) {
+      const card = document.createElement("div");
+      const isSelected = addItemsSelectedKits.has(kit.id);
+      const currentQty = addItemsSelectedKits.get(kit.id) || "";
+      card.className = `kit-card-select ${isSelected ? "selected" : ""}`;
+      card.dataset.kitId = kit.id;
+
+      const thumbImgHtml = kit.preview_image
+        ? `<div class="kit-card-thumb"><img src="${escapeHtml(kit.preview_image)}" class="kit-card-thumb-img" alt="${escapeHtml(kit.name)}" onerror="this.parentElement.innerHTML='<span class=\\'muted text-xs\\'>Không ảnh</span>'" /></div>`
+        : `<div class="kit-card-thumb"><span class="muted text-xs">Không ảnh</span></div>`;
+
+      card.innerHTML = `
+        <div class="kit-card-left">
+          <input type="checkbox" class="kit-card-checkbox" ${isSelected ? "checked" : ""} />
+          ${thumbImgHtml}
+          <div class="kit-card-info">
+            <span class="kit-card-name" title="${escapeHtml(kit.name)}">${escapeHtml(kit.name)}</span>
+            <span class="kit-card-items-count">${kit.total_items || (kit.items || []).length} linh kiện / bộ</span>
+          </div>
+        </div>
+        <div class="kit-card-qty-wrap">
+          <span class="kit-card-qty-label">SL:</span>
+          <input type="number" class="kit-card-qty-input" min="1" step="1" placeholder="SL" value="${isSelected ? currentQty : ""}" ${isSelected ? "" : "disabled"} />
+        </div>
+      `;
+
+      const chk = card.querySelector(".kit-card-checkbox");
+      const qtyInput = card.querySelector(".kit-card-qty-input");
+      const thumbEl = card.querySelector(".kit-card-thumb-img");
+
+      if (thumbEl && kit.preview_image) {
+        thumbEl.addEventListener("click", (e) => {
+          e.stopPropagation();
+          previewImageModal(kit.preview_image, kit.name);
+        });
+      }
+
+      const toggleCard = (checked) => {
+        chk.checked = checked;
+        qtyInput.disabled = !checked;
+        card.classList.toggle("selected", checked);
+        if (checked) {
+          qtyInput.value = "";
+          qtyInput.placeholder = "SL";
+          addItemsSelectedKits.set(kit.id, "");
+          qtyInput.focus();
+        } else {
+          qtyInput.value = "";
+          addItemsSelectedKits.delete(kit.id);
+        }
+        updateAddItemsSelectionSummary();
+      };
+
+      chk.addEventListener("change", (e) => {
+        toggleCard(e.target.checked);
+      });
+
+      card.addEventListener("click", (e) => {
+        if (e.target === chk || e.target === qtyInput || e.target === thumbEl) return;
+        toggleCard(!chk.checked);
+      });
+
+      qtyInput.addEventListener("input", (e) => {
+        const val = e.target.value.trim();
+        if (addItemsSelectedKits.has(kit.id)) {
+          addItemsSelectedKits.set(kit.id, val);
+        }
+        updateAddItemsSelectionSummary();
+      });
+
+      container.appendChild(card);
+    }
+  }
+
+  function renderAddItemsSelectedPanel() {
+    const panel = $("add-items-selected-panel");
+    const container = $("add-items-selected-chips");
+    if (!panel || !container) return;
+
+    if (addItemsSelectedComponents.size === 0) {
+      panel.style.display = "none";
+      container.innerHTML = "";
+      return;
+    }
+
+    panel.style.display = "block";
+    container.innerHTML = "";
+
+    addItemsSelectedComponents.forEach((val, key) => {
+      const it = val.item;
+      const row = document.createElement("div");
+      row.className = "selected-chip-row";
+      row.dataset.key = key;
+
+      const imgSrc = (it.images && it.images[0]) ? it.images[0] : "";
+      const thumbHtml = imgSrc
+        ? `<img src="${escapeHtml(imgSrc)}" class="selected-chip-thumb" alt="${escapeHtml(it.name)}" onerror="this.style.display='none'" />`
+        : "";
+
+      const codeHtml = it.code
+        ? `<span class="item-code-badge">${escapeHtml(it.code)}</span>`
+        : "";
+
+      row.innerHTML = `
+        <div class="selected-chip-left">
+          ${thumbHtml}
+          <div class="selected-chip-info">
+            <div class="selected-chip-name" title="${escapeHtml(it.name)}">${escapeHtml(it.name)} ${codeHtml}</div>
+            <div class="text-sm muted">${escapeHtml(it.source_kit_name)} · Đơn giá: ${formatMoney(it.unit_price || 0)}</div>
+          </div>
+        </div>
+        <div class="selected-chip-right">
+          <span style="font-size:12px; font-weight:600; color:#475569;">SL:</span>
+          <input type="number" min="1" step="1" class="selected-chip-qty" placeholder="SL" value="${val.qty || ""}" />
+          <button type="button" class="btn-remove-chip" title="Bỏ chọn linh kiện này">Xóa</button>
+        </div>
+      `;
+
+      const chipQtyInput = row.querySelector(".selected-chip-qty");
+      const btnRemove = row.querySelector(".btn-remove-chip");
+
+      chipQtyInput.addEventListener("input", (e) => {
+        const newQty = e.target.value.trim();
+        val.qty = newQty;
+        addItemsSelectedComponents.set(key, val);
+
+        // Sync with table row if visible
+        const tableRow = $(`add-items-tbody`)?.querySelector(`tr[data-key="${key}"]`);
+        if (tableRow) {
+          const tableQtyInput = tableRow.querySelector(".item-qty-input");
+          if (tableQtyInput) tableQtyInput.value = newQty;
+        }
+        updateAddItemsSelectionSummary();
+      });
+
+      btnRemove.addEventListener("click", () => {
+        addItemsSelectedComponents.delete(key);
+        renderAddItemsSelectedPanel();
+
+        // Sync with table row if visible
+        const tableRow = $(`add-items-tbody`)?.querySelector(`tr[data-key="${key}"]`);
+        if (tableRow) {
+          const chk = tableRow.querySelector(".item-row-chk");
+          const tableQtyInput = tableRow.querySelector(".item-qty-input");
+          if (chk) chk.checked = false;
+          if (tableQtyInput) {
+            tableQtyInput.disabled = true;
+            tableQtyInput.value = "";
+          }
+          tableRow.classList.remove("row-selected");
+        }
+        updateAddItemsSelectionSummary();
+      });
+
+      container.appendChild(row);
+    });
+  }
+
+  function renderAddItemsCatalogTable() {
+    const tbody = $("add-items-tbody");
+    if (!tbody) return;
+    const all = buildAllCatalogComponentsList();
+
+    const q = normalizeText(($("add-items-search")?.value || "").trim());
+    const kitFilter = $("add-items-filter-kit")?.value || "";
+
+    const filtered = all.filter((it) => {
+      if (kitFilter && it.source_kit_id !== kitFilter) return false;
+      if (q) {
+        const hay = normalizeText(`${it.name} ${it.code || ""} ${it.source_kit_name}`);
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+
+    tbody.innerHTML = "";
+    const emptyEl = $("add-items-empty");
+    if (emptyEl) emptyEl.hidden = filtered.length > 0;
+
+    const limit = Math.min(filtered.length, 300);
+    for (let i = 0; i < limit; i++) {
+      const it = filtered[i];
+      const key = `${it.source_kit_id}:${it.id}`;
+      const isSelected = addItemsSelectedComponents.has(key);
+      const savedData = addItemsSelectedComponents.get(key);
+      const currentQty = savedData ? (savedData.qty || "") : "";
+
+      const tr = document.createElement("tr");
+      tr.dataset.key = key;
+      if (isSelected) tr.classList.add("row-selected");
+
+      const imgSrc = (it.images && it.images[0]) ? it.images[0] : "";
+      const thumbHtml = imgSrc
+        ? `<div class="item-thumb-box"><img src="${escapeHtml(imgSrc)}" class="item-thumb-img" alt="${escapeHtml(it.name)}" onerror="this.parentElement.innerHTML='<span class=\\'item-thumb-placeholder\\'>Không ảnh</span>'" /></div>`
+        : `<div class="item-thumb-box"><span class="item-thumb-placeholder">Không ảnh</span></div>`;
+
+      const codeHtml = it.code
+        ? `<span class="item-code-badge" title="Mã linh kiện: ${escapeHtml(it.code)}">${escapeHtml(it.code)}</span>`
+        : "";
+
+      tr.innerHTML = `
+        <td style="text-align:center;">
+          <input type="checkbox" class="item-row-chk" ${isSelected ? "checked" : ""} style="width:17px; height:17px; cursor:pointer; accent-color:var(--primary);" />
+        </td>
+        <td style="text-align:center;">${thumbHtml}</td>
+        <td>
+          <div style="font-weight:600; color:var(--text);">${escapeHtml(it.name)} ${codeHtml}</div>
+          <div class="text-sm muted" style="margin-top:2px;">Đơn vị: ${escapeHtml(it.unit || 'cái')}</div>
+        </td>
+        <td><span class="badge-tag">${escapeHtml(it.source_kit_name)}</span></td>
+        <td style="text-align:right; font-weight:600; color:var(--text);">${formatMoney(it.unit_price || 0)}</td>
+        <td style="text-align:center;">
+          <input type="number" class="item-qty-input" min="1" step="1" placeholder="SL" value="${isSelected ? currentQty : ""}" ${isSelected ? "" : "disabled"} />
+        </td>
+      `;
+
+      const chk = tr.querySelector(".item-row-chk");
+      const qtyInput = tr.querySelector(".item-qty-input");
+      const imgEl = tr.querySelector(".item-thumb-img");
+
+      if (imgEl && imgSrc) {
+        imgEl.addEventListener("click", (e) => {
+          e.stopPropagation();
+          previewImageModal(imgSrc, it.name);
+        });
+      }
+
+      const toggleItem = (checked) => {
+        chk.checked = checked;
+        qtyInput.disabled = !checked;
+        tr.classList.toggle("row-selected", checked);
+        if (checked) {
+          qtyInput.value = "";
+          qtyInput.placeholder = "SL";
+          addItemsSelectedComponents.set(key, { source_kit_id: it.source_kit_id, item: it, qty: "" });
+          qtyInput.focus();
+        } else {
+          qtyInput.value = "";
+          addItemsSelectedComponents.delete(key);
+        }
+        renderAddItemsSelectedPanel();
+        updateAddItemsSelectionSummary();
+      };
+
+      chk.addEventListener("change", (e) => {
+        toggleItem(e.target.checked);
+      });
+
+      tr.addEventListener("click", (e) => {
+        if (e.target === chk || e.target === qtyInput || e.target === imgEl) return;
+        toggleItem(!chk.checked);
+      });
+
+      qtyInput.addEventListener("input", (e) => {
+        const val = e.target.value.trim();
+        if (addItemsSelectedComponents.has(key)) {
+          const existing = addItemsSelectedComponents.get(key);
+          existing.qty = val;
+          addItemsSelectedComponents.set(key, existing);
+        }
+        renderAddItemsSelectedPanel();
+        updateAddItemsSelectionSummary();
+      });
+
+      tbody.appendChild(tr);
+    }
+  }
 
   async function openAddRentalItemsModal(rentalId) {
     addItemsCurrentRentalId = rentalId;
@@ -4175,71 +4644,36 @@
       const r = data.rental;
       $("add-item-ticket-code").textContent = r.code;
 
-      // Populate Tab 1: Kits from catalog
-      const kitSelect = $("add-kit-select");
-      kitSelect.innerHTML = (state.catalog?.kits || [])
-        .map((k) => `<option value="${escapeHtml(k.id)}">${escapeHtml(k.name)} (${k.total_items} linh kiện)</option>`)
-        .join("");
-      $("add-kit-code").value = "";
+      // Reset selection maps
+      addItemsSelectedKits.clear();
+      addItemsSelectedComponents.clear();
 
-      // Populate Tab 2: Source kits and components
-      const sourceKitSelect = $("add-cat-source-kit");
-      sourceKitSelect.innerHTML = (state.catalog?.kits || [])
-        .map((k) => `<option value="${escapeHtml(k.id)}">${escapeHtml(k.name)}</option>`)
-        .join("");
-      
-      const populateCatItems = () => {
-        const selectedKid = sourceKitSelect.value;
-        const matchedKit = (state.catalog?.kits || []).find((k) => k.id === selectedKid);
-        const itemSelect = $("add-cat-item-select");
-        if (!matchedKit || !matchedKit.items) {
-          itemSelect.innerHTML = "<option value=''>Không có linh kiện</option>";
-          return;
-        }
-        itemSelect.innerHTML = matchedKit.items
-          .map(
-            (it) => `
-            <option value="${escapeHtml(it.id)}" data-price="${it.unit_price || 0}" data-unit="${escapeHtml(it.unit || 'cái')}" data-code="${escapeHtml(it.code || '')}">
-              ${escapeHtml(it.name)} ${it.code ? `[${it.code}]` : ''} · ${formatMoney(it.unit_price || 0)}
-            </option>
-          `
-          )
-          .join("");
-        updateCatItemPreview();
-      };
+      // Render Tab 1: Kits
+      renderAddKitsTab();
 
-      const updateCatItemPreview = () => {
-        const itemSelect = $("add-cat-item-select");
-        const opt = itemSelect.selectedOptions[0];
-        const preview = $("add-cat-item-preview");
-        if (!opt) {
-          preview.style.display = "none";
-          return;
-        }
-        const price = Number(opt.dataset.price || 0);
-        const unit = opt.dataset.unit || "cái";
-        const code = opt.dataset.code || "—";
-        const qty = Number($("add-cat-item-qty").value || 1);
-        preview.style.display = "block";
-        preview.innerHTML = `
-          <div><strong>Mã linh kiện:</strong> ${escapeHtml(code)} · <strong>Đơn vị:</strong> ${escapeHtml(unit)}</div>
-          <div style="margin-top:3px;"><strong>Đơn giá bồi thường:</strong> ${formatMoney(price)} / ${escapeHtml(unit)} · <strong>Thành tiền dự kiến:</strong> ${formatMoney(price * qty)}</div>
-        `;
-      };
+      // Setup Tab 2: Filters and components
+      const all = buildAllCatalogComponentsList();
+      const kitFilterSelect = $("add-items-filter-kit");
+      if (kitFilterSelect) {
+        kitFilterSelect.innerHTML = `<option value="">Tất cả các bộ (${all.length} linh kiện)</option>` +
+          (state.catalog?.kits || []).map((k) => `<option value="${escapeHtml(k.id)}">${escapeHtml(k.name)} (${(k.items || []).length} LK)</option>`).join("");
+      }
 
-      sourceKitSelect.onchange = populateCatItems;
-      $("add-cat-item-select").onchange = updateCatItemPreview;
-      $("add-cat-item-qty").oninput = updateCatItemPreview;
-      populateCatItems();
+      if ($("add-items-search")) $("add-items-search").value = "";
+      if (kitFilterSelect) kitFilterSelect.value = "";
+
+      renderAddItemsCatalogTable();
+      renderAddItemsSelectedPanel();
+      updateAddItemsSelectionSummary();
 
       // Reset Tab 3
       $("add-custom-name").value = "";
-      $("add-custom-qty").value = "1";
+      $("add-custom-qty").value = "";
       $("add-custom-price").value = "";
       $("add-custom-unit").value = "cái";
       $("add-custom-note").value = "";
 
-      // Reset tabs
+      // Reset active tab to Tab 1
       document.querySelectorAll(".tab-add-type").forEach((t) => t.classList.toggle("active", t.dataset.tab === "tab-add-kit"));
       $("tab-add-kit").hidden = false;
       $("tab-add-cat-item").hidden = true;
@@ -4258,29 +4692,62 @@
   async function submitAddRentalItems() {
     if (!addItemsCurrentRentalId) return;
     const activeTab = document.querySelector(".tab-add-type.active")?.dataset.tab;
-    const actor = $("add-item-actor").value.trim() || getCurrentStaffName();
+    const actor = $("add-item-actor")?.value.trim() || getCurrentStaffName();
 
     let payload = { actor };
     if (activeTab === "tab-add-kit") {
-      payload.item_type = "kit";
-      payload.kit_id = $("add-kit-select").value;
-      payload.kit_code = $("add-kit-code").value.trim();
+      if (addItemsSelectedKits.size === 0) {
+        showToast("Vui lòng tích chọn ít nhất 1 bộ kit cần thêm", "warning");
+        return;
+      }
+      const kits = [];
+      for (const [kit_id, qtyStr] of addItemsSelectedKits.entries()) {
+        const qtyNum = parseInt(qtyStr);
+        if (isNaN(qtyNum) || qtyNum <= 0) {
+          const matchedKit = (state.catalog?.kits || []).find((k) => k.id === kit_id);
+          showToast(`Vui lòng nhập số lượng cho bộ ${matchedKit ? matchedKit.name : kit_id}`, "warning");
+          return;
+        }
+        kits.push({ kit_id, qty: qtyNum });
+      }
+      payload.item_type = "batch_kits";
+      payload.kits = kits;
     } else if (activeTab === "tab-add-cat-item") {
-      payload.item_type = "catalog_item";
-      payload.source_kit_id = $("add-cat-source-kit").value;
-      payload.item_id = $("add-cat-item-select").value;
-      payload.qty = Number($("add-cat-item-qty").value || 1);
+      if (addItemsSelectedComponents.size === 0) {
+        showToast("Vui lòng tích chọn ít nhất 1 linh kiện lẻ cần thêm", "warning");
+        return;
+      }
+      const items = [];
+      for (const val of addItemsSelectedComponents.values()) {
+        const qtyNum = parseInt(val.qty);
+        if (isNaN(qtyNum) || qtyNum <= 0) {
+          showToast(`Vui lòng nhập số lượng cho linh kiện ${val.item.name}`, "warning");
+          return;
+        }
+        items.push({
+          source_kit_id: val.source_kit_id,
+          item_id: val.item.id,
+          qty: qtyNum,
+        });
+      }
+      payload.item_type = "batch_catalog_items";
+      payload.items = items;
     } else if (activeTab === "tab-add-custom") {
       payload.item_type = "custom_item";
       payload.name = $("add-custom-name").value.trim();
-      payload.qty = Number($("add-custom-qty").value || 1);
-      payload.unit_price = Number($("add-custom-price").value || 0);
-      payload.unit = $("add-custom-unit").value.trim() || "cái";
-      payload.note = $("add-custom-note").value.trim();
+      const customQty = parseInt($("add-custom-qty").value);
       if (!payload.name) {
         showToast("Vui lòng nhập tên sản phẩm / linh kiện", "error");
         return;
       }
+      if (isNaN(customQty) || customQty <= 0) {
+        showToast("Vui lòng nhập số lượng hợp lệ cho sản phẩm", "warning");
+        return;
+      }
+      payload.qty = customQty;
+      payload.unit_price = Number($("add-custom-price").value || 0);
+      payload.unit = $("add-custom-unit").value.trim() || "cái";
+      payload.note = $("add-custom-note").value.trim();
     }
 
     try {
@@ -4289,14 +4756,14 @@
         body: JSON.stringify(payload),
       });
       $("modal-add-rental-items").hidden = true;
-      showToast("Đã thêm vào đơn thuê thành công!", "success");
+      showToast("Đã thêm đồ trả vào đơn thuê thành công!", "success");
       await loadRentals();
       if (state.activeRental && state.activeRental.id === Number(addItemsCurrentRentalId)) {
         state.activeRental = res.rental;
         renderInspectionWorkspace();
       }
     } catch (err) {
-      showToast("Lỗi thêm linh kiện: " + err.message, "error");
+      showToast("Lỗi thêm đồ trả: " + err.message, "error");
     }
   }
 
@@ -4309,14 +4776,21 @@
       const origBox = $("compare-orig-kits-list");
       const origList = r.original_kits_summary || [];
       if (origList.length === 0) {
-        origBox.innerHTML = `<span class="muted text-sm">Không có dữ liệu bộ gốc.</span>`;
+        origBox.innerHTML = `<span class="muted text-sm">Không có dữ liệu thiết bị gốc ban đầu.</span>`;
       } else {
         origBox.innerHTML = origList
           .map(
             (k) => `
-          <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid var(--border);">
-            <span><strong>${escapeHtml(k.display_label || k.kit_name)}</strong></span>
-            <span class="muted text-sm">${k.total_items} linh kiện</span>
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-bottom:1px solid #e2e8f0; background:#ffffff; border-radius:8px; margin-bottom:6px;">
+            <div>
+              <strong style="color:var(--text); font-size:13.5px;">${escapeHtml(k.name || k.kit_name || k.display_label)}</strong>
+              ${k.unit_price ? `<div class="muted text-xs" style="margin-top:2px;">Đơn giá: ${formatMoney(k.unit_price)}</div>` : ''}
+            </div>
+            <div>
+              <span class="badge-tag" style="font-weight:700; font-size:12.5px; padding:3px 12px; background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; border-radius:999px;">
+                Số lượng: ${k.qty || 1} ${escapeHtml(k.unit || 'bộ')}
+              </span>
+            </div>
           </div>
         `
           )
@@ -4331,13 +4805,15 @@
         addedBox.innerHTML = addedList
           .map(
             (it) => `
-          <div style="display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid var(--border);">
+          <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-bottom:1px solid #e2e8f0; background:#ffffff; border-radius:8px; margin-bottom:6px;">
             <div>
-              <strong style="color:var(--green);">${escapeHtml(it.display_label || it.item_name || it.kit_name)}</strong>
-              ${it.unit_price ? `<div class="muted text-sm">Đơn giá: ${formatMoney(it.unit_price)}</div>` : ''}
+              <strong style="color:var(--green); font-size:13.5px;">${escapeHtml(it.name || it.item_name || it.kit_name || it.display_label)}</strong>
+              ${it.unit_price ? `<div class="muted text-xs" style="margin-top:2px;">Đơn giá: ${formatMoney(it.unit_price)}</div>` : ''}
             </div>
             <div>
-              <span class="badge-return badge-returned">+ ${it.qty || it.total_items || 1} ${escapeHtml(it.unit || 'món')}</span>
+              <span class="badge-return badge-returned" style="font-weight:700; font-size:12.5px; padding:3px 12px; border-radius:999px;">
+                Số lượng: ${it.qty || 1} ${escapeHtml(it.unit || 'món')}
+              </span>
             </div>
           </div>
         `
